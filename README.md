@@ -32,7 +32,7 @@ Non ancora eseguibile, in costruzione.
     ├── use-cases.md      casi d'uso (lezione 1)
     └── architecture-v1.md architettura (lezione 1)
 
-## Stato del progetto
+## Stato del progetto: Implementato il filtro interventi.
 
 Lezione 2: repository creato, branch strategy concordata, backlog trasferito in issue. Non esiste ancora codice applicativo.
 
