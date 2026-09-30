@@ -1,2 +1,0 @@
-Riga 1: Intestazione progetto
-Riga 2: Descrizione base del progetto
