@@ -54,17 +54,22 @@ Elenco esplicito: chi dipende da chi, e cosa succede se il componente da cui si 
 Componente
 Dipende da
 Se si ferma
-Esempio: Frontend
-API backend
-l'utente vede un errore, nessun dato scritto due volte
-
-
-
-
-
-
+Frontend Web App 
+Server Backend (API) 
+L'utente vede un errore di connessione/rete; non è possibile caricare nuove segnalazioni né salvare modifiche. 
+Server Backend (API) 
+Database (DB) 
+L'API restituisce un errore 500 (Internal Server Error); l'intero sistema va in modalità di errore mantenendo attivo solo l'health check. 
+Server Backend (API) 
+Modulo IA (Suggeritore) 
+L'API funziona regolarmente: la segnalazione viene creata comunque, ma il sistema consente all'operatore di selezionare categoria e priorità manualmente. 
+Server Backend (API) 
+Server Immagini (Storage Foto) 
+L'API consente la creazione della segnalazione senza immagini allegate oppure notifica il fallimento dell'upload foto senza bloccare i dati testuali. 
 
 Fuori dal perimetro
 Cosa esiste ma non lo costruite voi: sistemi del cliente, servizi esterni, integrazioni future dichiarate nella richiesta.
 
-Esempio: integrazione con sistemi di notifica aziendali (futura, non in v1)
+Integrazione con centrali di emergenza o servizi pubblici: eventi e coordinate sono simulati all'interno della piattaforma.
+Servizio notifiche esterne (SMS / Email / Push): Predisposto nell'architettura ma non incluso nel perimetro funzionale di questa versione.
+Servizi cartografici o GIS avanzati di terze parti: Predisposizione futura per l'integrazione con mappe esterne e geocoding avanzato.
