@@ -4,7 +4,7 @@
 | :---- | :---- |
 | **Cliente** | Territorio Sicuro Consorzio |
 | **Team** | Team 3 |
-| **Membri** | Alessio Innocenti, Gabriel Ignat, Sabrina Spaneshi |
+| **Membri** | Alessio Innocenti, Gabriel Ignat, Sabrina Spaneshi, Carmen Nuvoli |
 | **Data** | 30/09/2026 |
 | **Versione** | v0.1 |
 
