@@ -1,0 +1,29 @@
+{
+  "name": "emergencyoperations",
+  "version": "1.0.0",
+  "description": "|  |  |\r | :---- | :---- |\r | **Cliente** | Territorio Sicuro Consorzio |\r | **Team** | Team 3 |\r | **Membri** | Alessio Innocenti, Gabriel Ignat, Sabrina Spaneshi |\r | **Data** | 30/09/2026 |\r | **Versione** | v0.1 |",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Al23ssio/EmergencyOperations.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/Al23ssio/EmergencyOperations/issues"
+  },
+  "homepage": "https://github.com/Al23ssio/EmergencyOperations#readme",
+  "dependencies": {
+    "dotenv": "^18.0.7",
+    "express": "^5.3.0",
+    "pg": "^8.23.1"
+  }
+}
