@@ -63,7 +63,9 @@ Risultato osservabile: Lo stato della segnalazione passa a "in intervento" o "ri
 *UC5 — Chiusura della segnalazione*
 Attore: Operatore di centrale 
 Precondizione: La segnalazione è stata portata dalla squadra nello stato "risolta". 
-Risultato osservabile: La segnalazione passa allo stato "chiusa" e viene archiviata con il tracciamento di tutte le fasi del suo ciclo di vita 
+Risultato osservabile: La segnalazione passa allo stato "chiusa" e viene archiviata con il tracciamento di tutte le fasi del suo ciclo di vita
+
+ENDPOINT: PATCH /interventi/{id}
 
 
 *UC6 — Consultazione complessiva, ricerca e filtraggio*
