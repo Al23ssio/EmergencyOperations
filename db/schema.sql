@@ -49,8 +49,8 @@ CREATE TABLE segnalazione (
   canale             VARCHAR(20)
                      CHECK (canale IN ('telefono','email','web','altro')),
   classificazione_ai VARCHAR(100),
-  creata_il          TIMESTAMP NOT NULL DEFAULT now(),
-  chiusa_il          TIMESTAMP,
+  creata_il          TIMESTAMPTZ NOT NULL DEFAULT now(),
+  chiusa_il          TIMESTAMPTZ,
   id_utente          INT NOT NULL REFERENCES utente(id),
   id_area            INT NOT NULL REFERENCES area(id),
   id_categoria       INT REFERENCES categoria(id)
