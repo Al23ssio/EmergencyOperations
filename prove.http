@@ -1,0 +1,26 @@
+### 1. CREA una segnalazione
+POST http://localhost:3000/segnalazioni
+Content-Type: application/json
+
+{
+  "titolo": "Albero caduto in via Roma",
+  "descrizione": "Ramo grande che blocca la carreggiata",
+  "indirizzo": "Via Roma 10",
+  "priorita": "alta",
+  "canale": "telefono",
+  "id_utente": 1,
+  "id_area": 1,
+  "id_categoria": 4
+}
+
+### 2. LEGGI tutte le segnalazioni
+GET http://localhost:3000/segnalazioni
+
+### 3. LEGGI la segnalazione numero 1
+GET http://localhost:3000/segnalazioni/1
+
+### 4. AGGIORNA lo stato
+PATCH http://localhost:3000/segnalazioni/1/stato
+Content-Type: application/json
+
+{ "stato": "valutata" }
