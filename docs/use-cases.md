@@ -12,11 +12,11 @@ Data
 Versione
 v2
 
-
+#
 **Attori**
 
 Un attore è un ruolo, non una persona: la stessa persona può essere due attori. Prendeteli dalla sezione "utenti e ruoli" della richiesta cliente.
-
+#
 **Attore**
 
 Cosa ottiene dal sistema
@@ -31,7 +31,7 @@ Consulta la situazione complessiva, effettua ricerche/filtraggi avanzati e anali
 Amministratore 
 Gestisce gli utenti, i ruoli con accessi differenziati e le configurazioni di sistema. 
 
-
+#
 **Casi d'uso**
 
 Formato minimo: attore + azione + risultato osservabile. Un caso d'uso senza attore è una funzione che nessuno ha chiesto; un attore senza casi d'uso è un ruolo inutile. Numerateli: li richiamerete nel backlog.
