@@ -14,6 +14,14 @@ const MACCHINA_STATI = {
   chiusa: []
 };
 
+router.get('/stati', (req, res) => {
+  res.json({
+    stati: STATI_VALIDI,
+    transizioni: MACCHINA_STATI,
+    descrizione: 'Sequenza consentita: ricevuta -> valutata -> assegnata -> in_intervento -> risolta -> chiusa'
+  });
+});
+
 // Gestione degli errori del database
 function gestisciErrore(err, res) {
   console.error('Errore:', err.message);

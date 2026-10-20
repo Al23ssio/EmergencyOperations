@@ -133,6 +133,29 @@ paths:
           description: Stato mancante, non valido o transizione non consentita
         '404':
           description: Segnalazione non trovata
+  /segnalazioni/stati:
+    get:
+      summary: Restituisce la definizione della state machine
+      responses:
+        '200':
+          description: Definizione degli stati e delle transizioni consentite
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  stati:
+                    type: array
+                    items:
+                      type: string
+                  transizioni:
+                    type: object
+                    additionalProperties:
+                      type: array
+                      items:
+                        type: string
+                  descrizione:
+                    type: string
 components:
   schemas:
     Segnalazione:
