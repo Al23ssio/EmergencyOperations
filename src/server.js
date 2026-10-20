@@ -1,6 +1,6 @@
 const express = require('express');
 const pool = require('./db');
-const { listaInterventi } = require('./interventi/listra');
+const { listaInterventi, aggiornaStatoIntervento } = require('./interventi/listra');
 
 const app = express();
 app.use(express.json());
@@ -8,8 +8,24 @@ app.use('/segnalazioni', require('./segnalazioni'));
 
 // Nuovo endpoint per ottenere la lista degli interventi filtrati per tecnico
 app.get('/interventi', (req, res) => {
-  const { tecnicoId } = req.query;
-  res.json(listaInterventi(tecnicoId));
+  const { tecnicoId, stato } = req.query;
+  res.json(listaInterventi(tecnicoId, stato));
+});
+
+app.patch('/interventi/:id', (req, res) => {
+  const { id } = req.params;
+  const { stato } = req.body;
+
+  if (!stato) {
+    return res.status(400).json({ errore: 'stato obbligatorio' });
+  }
+
+  const risultato = aggiornaStatoIntervento(id, stato);
+  if (risultato.code !== 200) {
+    return res.status(risultato.code).json({ errore: risultato.errore });
+  }
+
+  res.json(risultato.intervento);
 });
 
 app.use(express.static('public'));

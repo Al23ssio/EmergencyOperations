@@ -82,5 +82,32 @@ GET http://localhost:3000/interventi?tecnicoId=10
 ### 15. LISTA TUTTI GLI INTERVENTI
 GET http://localhost:3000/interventi
 
-### 16. LISTA INTERVENTI PER TECNICO NON ESISTENTE
+### 16. LISTA INTERVENTI PER STATO
+GET http://localhost:3000/interventi?stato=in_intervento
+
+### 17. AGGIORNA STATO INTERVENTO (VALIDO: assegnata -> in_intervento)
+PATCH http://localhost:3000/interventi/1
+Content-Type: application/json
+
+{ "stato": "in_intervento" }
+
+### 18. AGGIORNA STATO INTERVENTO (VALIDO: in_intervento -> risolta)
+PATCH http://localhost:3000/interventi/2
+Content-Type: application/json
+
+{ "stato": "risolta" }
+
+### 19. AGGIORNA STATO INTERVENTO (NON VALIDO: risolta -> in_intervento)
+PATCH http://localhost:3000/interventi/3
+Content-Type: application/json
+
+{ "stato": "in_intervento" }
+
+### 20. AGGIORNA STATO INTERVENTO (NON VALIDO: stato non supportato)
+PATCH http://localhost:3000/interventi/1
+Content-Type: application/json
+
+{ "stato": "chiusa" }
+
+### 21. LISTA INTERVENTI PER TECNICO NON ESISTENTE
 GET http://localhost:3000/interventi?tecnicoId=999
