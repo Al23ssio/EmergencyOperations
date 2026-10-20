@@ -1,0 +1,185 @@
+openapi: 3.0.3
+info:
+  title: Emergency Operations API
+  version: 0.1.0
+  description: |
+    API per la gestione delle segnalazioni di territorio.
+
+    Nota importante: finché non sarà disponibile il sistema di autenticazione,
+    il campo `id_utente` viene ancora ricevuto dal body della richiesta per
+    compatibilità con il database. In futuro sarà sostituito con l'utente
+    autenticato dal token/sessione.
+servers:
+  - url: http://localhost:3000
+paths:
+  /segnalazioni:
+    post:
+      summary: Crea una nuova segnalazione
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - titolo
+                - id_utente
+                - id_area
+              properties:
+                titolo:
+                  type: string
+                  example: Buca in strada
+                descrizione:
+                  type: string
+                  example: Buca davanti al civico 12
+                indirizzo:
+                  type: string
+                  example: Via Roma 12
+                latitudine:
+                  type: number
+                  format: double
+                  example: 38.1157
+                longitudine:
+                  type: number
+                  format: double
+                  example: 13.3615
+                priorita:
+                  type: string
+                  enum: [bassa, media, alta, urgente]
+                  default: media
+                canale:
+                  type: string
+                  enum: [telefono, email, web, altro]
+                id_utente:
+                  type: integer
+                  description: >
+                    Temporaneo: in attesa dell'autenticazione viene passato dal body.
+                id_area:
+                  type: integer
+                  example: 1
+                id_categoria:
+                  type: integer
+                  nullable: true
+                  example: 2
+      responses:
+        '201':
+          description: Segnalazione creata
+        '400':
+          description: Dati obbligatori mancanti o non validi
+    get:
+      summary: Elenca tutte le segnalazioni
+      responses:
+        '200':
+          description: Lista delle segnalazioni
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Segnalazione'
+  /segnalazioni/{id}:
+    get:
+      summary: Ottiene una segnalazione per ID
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Dettaglio segnalazione
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Segnalazione'
+        '404':
+          description: Segnalazione non trovata
+  /segnalazioni/{id}/stato:
+    patch:
+      summary: Aggiorna lo stato di una segnalazione
+      description: |
+        La macchina a stati consentita è:
+        ricevuta -> valutata -> assegnata -> in_intervento -> risolta -> chiusa
+
+        Le transizioni non previste restituiscono 400 Bad Request.
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - stato
+              properties:
+                stato:
+                  type: string
+                  enum: [ricevuta, valutata, assegnata, in_intervento, risolta, chiusa]
+                  example: valutata
+      responses:
+        '200':
+          description: Segnalazione aggiornata
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Segnalazione'
+        '400':
+          description: Stato mancante, non valido o transizione non consentita
+        '404':
+          description: Segnalazione non trovata
+components:
+  schemas:
+    Segnalazione:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        titolo:
+          type: string
+          example: Buca in strada
+        descrizione:
+          type: string
+          nullable: true
+        indirizzo:
+          type: string
+          nullable: true
+        latitudine:
+          type: number
+          nullable: true
+        longitudine:
+          type: number
+          nullable: true
+        priorita:
+          type: string
+          enum: [bassa, media, alta, urgente]
+        stato:
+          type: string
+          enum: [ricevuta, valutata, assegnata, in_intervento, risolta, chiusa]
+        canale:
+          type: string
+          nullable: true
+          enum: [telefono, email, web, altro]
+        classificazione_ai:
+          type: string
+          nullable: true
+        creata_il:
+          type: string
+          format: date-time
+        chiusa_il:
+          type: string
+          format: date-time
+          nullable: true
+        id_utente:
+          type: integer
+        id_area:
+          type: integer
+        id_categoria:
+          type: integer
+          nullable: true
