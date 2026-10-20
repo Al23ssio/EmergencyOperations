@@ -6,7 +6,7 @@
 | **Team** | Team 3 |
 | **Membri** | Alessio Innocenti, Gabriel Ignat, Sabrina Spaneshi, Carmen Nuvoli |
 | **Data** | 30/09/2026 |
-| **Versione** | v0.1 |
+| **Versione** | v0.2 |
 
 ## Cosa fa questo progetto
 
@@ -14,51 +14,131 @@ Piattaforma condivisa per la gestione del ciclo completo delle segnalazioni sul 
 
 ## Stack
 
-Stack: Node.js + Express
-Frontend: React
-Database: PostgreSQL
+| Parte | Tecnologia |
+| :---- | :---- |
+| Backend (API REST) | Node.js 20+ con Express 5 |
+| Database | PostgreSQL 16, avviato con Docker Compose |
+| Accesso al database | libreria `pg` (query SQL parametrizzate) |
+| Configurazione | variabili d'ambiente nel file `.env` (letto con `dotenv`) |
+| Frontend | pagina statica HTML / CSS / JavaScript in `public/`, servita da Express |
+| Test | test runner integrato di Node (`node --test`) |
 
-## Come si esegue
+## Requisiti
 
-1. Avviare il database PostgreSQL con Docker Compose.
-2. Eseguire il server Node.js:
-   - `npm install`
-   - `node src/server.js`
-3. Verificare gli endpoint via `prove.http` o tramite client REST.
+Programmi da avere installati sul computer:
+
+- [Node.js](https://nodejs.org) versione 20 o superiore (con `npm`)
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/) — su Windows in modalità **Linux containers**
+- Git
+
+PostgreSQL **non** va installato: lo avvia Docker.
+
+## Come si avvia il progetto
+
+Tutti i comandi vanno lanciati nella cartella principale del progetto.
+Su Windows usare **Git CMD** o il **Prompt dei comandi**: in PowerShell `npm` può essere bloccato.
+
+**1. Creare il file `.env`** copiando l'esempio:
+
+```
+copy .env.example .env        (Windows)
+cp .env.example .env          (Mac / Linux)
+```
+
+Poi, se si vuole, cambiare la password dentro `.env`. Il file `.env` non va mai caricato su GitHub.
+
+**2. Installare le librerie:**
+
+```
+npm install
+```
+
+**3. Avviare il database** (con Docker Desktop aperto):
+
+```
+docker compose up -d
+```
+
+Al **primo avvio** Docker crea il database ed esegue da solo `db/schema.sql`: crea tutte le tabelle e inserisce i dati di prova (ruoli, utenti, squadre, aree, categorie). Non serve lanciare lo script a mano.
+
+**4. Avviare il backend:**
+
+```
+npm start
+```
+
+Devono comparire `Database connesso` e `Server avviato su http://localhost:3000`.
+
+**5. Verificare che funzioni:**
+
+- http://localhost:3000/health → deve rispondere `{"server":"ok","database":"ok"}`
+- http://localhost:3000 → pagina web con l'elenco delle segnalazioni
+- `prove.http` → richieste di prova da inviare con l'estensione **REST Client** di VS Code
+
+**6. Eseguire i test** (con il backend acceso, in un secondo terminale):
+
+```
+npm test
+```
+
+### Comandi utili per il database
+
+| Comando | Cosa fa |
+| :---- | :---- |
+| `docker compose up -d` | accende il database |
+| `docker compose down` | spegne il database, **i dati restano** |
+| `docker compose down -v` | spegne e **cancella tutti i dati**: al prossimo `up` lo schema viene ricreato da zero |
+| `docker compose ps` | mostra se il database è acceso (`healthy`) |
+
+> `db/schema.sql` viene eseguito **solo quando il volume del database è vuoto**. Se lo schema cambia (per esempio dopo un `git pull`), per applicarlo bisogna lanciare `docker compose down -v` e poi `docker compose up -d`. Attenzione: questo cancella i dati presenti.
 
 ## Struttura del repository
 
+```
 .
-├── README.md            questo file
+├── README.md             questo file
 ├── CONTRIBUTING.md       come contribuire: branch, commit, Definition of Done
-├── openapi.yaml         prima bozza di documentazione OpenAPI
-├── docs/
-│   ├── requirements.md   requisiti (lezione 1)
-│   ├── use-cases.md      casi d'uso (lezione 1)
-│   ├── architecture-v1.md architettura (lezione 1)
-│   └── api.md            documentazione API delle funzionalità principali
-├── src/
-│   ├── db.js             connessione al database
-│   ├── server.js         bootstrap dell'API Express
-│   ├── segnalazioni.js   CRUD e gestione stato segnalazioni
-│   └── interventi/
-│       └── listra.js     lista e filtro interventi, aggiornamento stato
-├── public/              frontend statico iniziale
+├── openapi.yaml          documentazione OpenAPI delle API
+├── .env.example          esempio delle variabili d'ambiente (da copiare in .env)
+├── docker-compose.yml    avvio del database PostgreSQL + esecuzione automatica dello schema
+├── package.json          dipendenze e comandi npm (start, test)
+├── prove.http            richieste HTTP di prova manuali
 ├── db/
-│   └── schema.sql       schema del database
-├── docker-compose.yml   configurazione del database
-├── prove.http           richieste HTTP di test manuali
-└── .env                 variabili d'ambiente locali
+│   └── schema.sql        tabelle, vincoli e dati di prova (allineato a docs/data-model.md)
+├── docs/
+│   ├── requirements.md   requisiti
+│   ├── use-cases.md      casi d'uso
+│   ├── architecture-v1.md architettura
+│   ├── data-model.md     modello logico dei dati
+│   ├── api.md            documentazione API
+│   ├── backlog.md        product backlog e issue
+│   └── domande-cliente.md domande aperte per il cliente
+├── src/
+│   ├── server.js         avvio dell'API Express e endpoint /health
+│   ├── db.js             connessione al database (legge il file .env)
+│   └── segnalazioni.js   CRUD e macchina a stati delle segnalazioni
+├── public/               frontend statico (index.html, app.js, style.css)
+└── tests/                test automatici degli endpoint
+```
+
+## Database
+
+Lo schema in `db/schema.sql` contiene 12 tabelle, allineate a `docs/data-model.md`:
+
+`ruolo`, `utente`, `squadra`, `squadra_utente`, `area`, `categoria`, `segnalazione`, `allegato`, `assegnazione`, `nota`, `storico_modifica`, `suggerimento_ai`.
+
+Ogni tabella ha chiave primaria, chiavi esterne verso le tabelle collegate e vincoli `CHECK` sui valori ammessi (stati, priorità, canali, confidenza AI tra 0 e 1, date coerenti).
 
 ## Stato del progetto
 
 Feature implementate:
 - creazione e lettura segnalazioni
-- `PATCH /segnalazioni/:id/stato` con state machine valida
+- `PATCH /segnalazioni/:id/stato` con macchina a stati
 - blocco transizioni non consentite con `400 Bad Request`
 - gestione di `chiusa_il` solo allo stato `chiusa`
-- endpoint `GET /segnalazioni/stati` per introspezione della macchina a stati
-- filtro interventi per tecnico e aggiornamento `PATCH /interventi/:id`
+- endpoint `GET /segnalazioni/stati` per vedere stati e transizioni ammesse
+- endpoint `GET /health` per controllare server e database
+- schema completo del database con creazione automatica tramite Docker
 - documentazione OpenAPI iniziale e documentazione API
 
 Limite noto:
