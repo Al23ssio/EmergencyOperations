@@ -75,3 +75,12 @@ PATCH http://localhost:3000/segnalazioni/1/stato
 Content-Type: application/json
 
 {}
+
+### 14. LISTA INTERVENTI PER TECNICO
+GET http://localhost:3000/interventi?tecnicoId=10
+
+### 15. LISTA TUTTI GLI INTERVENTI
+GET http://localhost:3000/interventi
+
+### 16. LISTA INTERVENTI PER TECNICO NON ESISTENTE
+GET http://localhost:3000/interventi?tecnicoId=999
