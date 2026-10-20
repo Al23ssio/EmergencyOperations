@@ -8,7 +8,8 @@ test('GET /health - Happy Path: Server e DB attivi', async () => {
   const res = await fetch(`${BASE_URL}/health`);
   assert.strictEqual(res.status, 200);
   const body = await res.json();
-  assert.ok(body.status);
+  assert.strictEqual(body.server, 'ok');
+  assert.strictEqual(body.database, 'ok');
 });
 
 // 2. GET /segnalazioni - Happy Path
