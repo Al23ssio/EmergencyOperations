@@ -5,6 +5,7 @@ const { listaInterventi, aggiornaStatoIntervento } = require('./interventi/listr
 const app = express();
 app.use(express.json());
 app.use('/segnalazioni', require('./segnalazioni'));
+app.use(express.static('public'));
 
 // Nuovo endpoint per ottenere la lista degli interventi filtrati per tecnico
 app.get('/interventi', (req, res) => {
