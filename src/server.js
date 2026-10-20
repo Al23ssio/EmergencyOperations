@@ -4,6 +4,7 @@ const pool = require('./db');
 const app = express();
 app.use(express.json());
 app.use('/segnalazioni', require('./segnalazioni'));
+app.use(express.static('public'));
 
 // Controllo di salute: dice se il server e il database funzionano
 app.get('/health', async (req, res) => {
