@@ -21,7 +21,7 @@ Questo documento raccoglie il backlog di prodotto strutturato in **User Story** 
 | **ISS-07** | Backend | **Macchina a stati in `PATCH /segnalazioni/:id/stato`** | Validazione rigorosa delle transizioni (`ricevuta` → `valutata` → `assegnata` → `in_intervento` → `risolta` → `chiusa`), errore `400 Bad Request` per transizioni illecite e valorizzazione corretta di `chiusa_il`. | Alessio | 🔴 Critica | `TODO` |
 | **ISS-08** | API Docs | **Specifica contratti API e nota limiti noti** | Stesura prima bozza `openapi.yaml` / `docs/api.md` per gli endpoint principali e documentazione del limite noto su `id_utente` passato nel body. | Alessio | 🟠 Alta | `TODO` |
 | **ISS-09** | QA / Test | **Suite di test automatici sugli endpoint** | Creazione test in `tests/` con almeno 1 happy path e 1 caso d'errore per ciascun endpoint (`POST`, `GET`, `PATCH`) + verifica manuale API. | Carmen | 🔴 Critica | `TODO` |
-| **ISS-10** | Frontend | **Integrazione base "Filo Frontend-Backend"** | Creazione di una vista web HTML/JS collegata agli endpoint reali del backend (es. lista segnalazioni da DB) senza utilizzo di dati mock. | Carmen | 🟠 Alta | `TODO` |
+| **ISS-10** | Frontend | **Integrazione base "Filo Frontend-Backend"** | Creazione di una vista web HTML/JS collegata agli endpoint reali del backend (es. lista segnalazioni da DB) senza utilizzo di dati mock. | Carmen | 🟠 Alta | `DONE` |
 
 ---
 
