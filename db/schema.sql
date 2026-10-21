@@ -211,17 +211,23 @@ INSERT INTO squadra (nome) VALUES
   ('Squadra Nord'),
   ('Squadra Centro');
 
+
 INSERT INTO squadra_utente (id_squadra, id_utente) VALUES
   (1, 2),
   (2, 3);
-
+  
 INSERT INTO area (nome, codice_comune) VALUES
   ('Centro', 'L378'),
-  ('Periferia Nord', 'L378');
+  ('Periferia Nord', 'L378'),
+  ('Periferia Sud', 'L378'),
+  ('Zona Industriale / Est', 'L378'),
+  ('Frazioni collinari / Ovest', 'L378'),
+  ('A22 / Rete Viaria Principale', 'L378');
 
 INSERT INTO categoria (nome, descrizione) VALUES
   ('Viabilita',     'Strade e buche'),
   ('Dissesto',      'Piccoli dissesti del terreno'),
   ('Allagamento',   'Allagamenti e acqua'),
   ('Albero caduto', 'Alberi o rami caduti'),
+  ('Incendio', 'Incendi a impianti e infrastrutture'),
   ('Guasto',        'Guasti a impianti e infrastrutture');
