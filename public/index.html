@@ -16,42 +16,101 @@
   </header>
 
   <main class="container">
+    <!-- FORM DI INSERIMENTO COMPLETO -->
     <section class="card">
       <div class="card-header">
-        <h2>Nuova Segnalazione</h2>
+        <h2>Nuova Segnalazione Completa</h2>
       </div>
       <form id="form-segnalazione" class="form-grid">
-        <div class="form-group">
-          <label for="descrizione">Descrizione</label>
-          <input type="text" id="descrizione" name="descrizione" placeholder="es. Albero caduto in strada" required>
+        <div class="form-group full-width">
+          <label for="titolo">Titolo *</label>
+          <input type="text" id="titolo" name="titolo" placeholder="es. Albero caduto in strada" required>
         </div>
+
+        <div class="form-group full-width">
+          <label for="descrizione">Descrizione</label>
+          <input type="text" id="descrizione" name="descrizione" placeholder="es. Ostruisce la carreggiata principale vicina al civico 12">
+        </div>
+
         <div class="form-group">
-          <label for="categoria">Categoria</label>
-          <select id="categoria" name="categoria" required>
-            <option value="viabilita">Viabilità</option>
-            <option value="incendio">Incendio</option>
-            <option value="allagamento">Allagamento</option>
+          <label for="indirizzo">Indirizzo</label>
+          <input type="text" id="indirizzo" name="indirizzo" placeholder="es. Via Roma 45">
+        </div>
+
+        <div class="form-group">
+          <label for="latitudine">Latitudine</label>
+          <input type="number" step="0.000001" id="latitudine" name="latitudine" placeholder="es. 45.890123" min="-90" max="90">
+        </div>
+
+        <div class="form-group">
+          <label for="longitudine">Longitudine</label>
+          <input type="number" step="0.000001" id="longitudine" name="longitudine" placeholder="es. 11.040123" min="-180" max="180">
+        </div>
+
+        <div class="form-group">
+          <label for="id_area">Area *</label>
+          <select id="id_area" name="id_area" required>
+            <option value="1">Centro</option>
+            <option value="2">Periferia Nord</option>
+            <option value="3">Periferia Sud</option>
+            <option value="4">Zona Industriale / Est</option>
+            <option value="5">Frazioni collinari / Ovest</option>
+            <option value="6">A22 / Rete Viaria Principale</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label for="id_categoria">Categoria</label>
+          <select id="id_categoria" name="id_categoria">
+            <option value="1">Viabilità</option>
+            <option value="2">Dissesto</option>
+            <option value="3">Allagamento</option>
+            <option value="4" selected>Albero caduto</option>
+            <option value="5">Incendio</option>
+            <option value="6">Guasto</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label for="canale">Canale di Ricezione</label>
+          <select id="canale" name="canale">
+            <option value="web" selected>Web</option>
+            <option value="telefono">Telefono</option>
+            <option value="email">Email</option>
             <option value="altro">Altro</option>
           </select>
         </div>
+
         <div class="form-group">
-          <label for="priorita">Priorità</label>
+          <label for="priorita">Priorità *</label>
           <select id="priorita" name="priorita" required>
             <option value="bassa">Bassa</option>
-            <option value="media">Media</option>
+            <option value="media" selected>Media</option>
             <option value="alta">Alta</option>
+            <option value="urgente">Urgente</option>
           </select>
         </div>
-        <button type="submit" class="btn btn-primary">Invia Segnalazione</button>
+
+        <div class="form-group">
+          <label for="id_utente">Operatore / Utente *</label>
+          <select id="id_utente" name="id_utente" required>
+            <option value="1">Mario Rossi (mrossi)</option>
+            <option value="2">Luca Bianchi (lbianchi)</option>
+            <option value="3">Giulia Verdi (gverdi)</option>
+          </select>
+        </div>
+
+        <button type="submit" class="btn btn-primary full-width">Invia Segnalazione</button>
       </form>
     </section>
 
+    <!-- TABELLA VISUALIZZAZIONE DETTAGLIATA -->
     <section class="card">
       <div class="card-header">
-        <h2>Lista Segnalazioni</h2>
+        <h2>Registro Segnalazioni</h2>
         <button id="btn-refresh" class="btn btn-secondary">🔄 Aggiorna</button>
       </div>
-      <div id="lista-container">
+      <div id="lista-container" class="table-responsive">
         <p class="loading">Caricamento segnalazioni in corso...</p>
       </div>
     </section>

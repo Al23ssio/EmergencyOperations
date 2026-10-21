@@ -70,11 +70,16 @@ INSERT INTO utente (username, email, password_hash, nome_cognome, id_ruolo) VALU
 
 INSERT INTO area (nome, codice_comune) VALUES
   ('Centro', 'L378'),
-  ('Periferia Nord', 'L378');
+  ('Periferia Nord', 'L378'),
+  ('Periferia Sud', 'L378'),
+  ('Zona Industriale / Est', 'L378'),
+  ('Frazioni collinari / Ovest', 'L378'),
+  ('A22 / Rete Viaria Principale', 'L378');
 
 INSERT INTO categoria (nome, descrizione) VALUES
   ('Viabilita',     'Strade e buche'),
   ('Dissesto',      'Piccoli dissesti del terreno'),
   ('Allagamento',   'Allagamenti e acqua'),
   ('Albero caduto', 'Alberi o rami caduti'),
+  ('Incendio', 'Incendi a impianti e infrastrutture'),
   ('Guasto',        'Guasti a impianti e infrastrutture');
