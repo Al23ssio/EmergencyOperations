@@ -211,6 +211,7 @@ INSERT INTO squadra (nome) VALUES
   ('Squadra Nord'),
   ('Squadra Centro');
 
+
 INSERT INTO squadra_utente (id_squadra, id_utente) VALUES
   (1, 2),
   (2, 3);

@@ -4,6 +4,24 @@ const pool = require('./db');
 
 const router = express.Router();
 
+const STATI_VALIDI = ['ricevuta', 'valutata', 'assegnata', 'in_intervento', 'risolta', 'chiusa'];
+const MACCHINA_STATI = {
+  ricevuta: ['valutata'],
+  valutata: ['assegnata'],
+  assegnata: ['in_intervento'],
+  in_intervento: ['risolta'],
+  risolta: ['chiusa'],
+  chiusa: []
+};
+
+router.get('/stati', (req, res) => {
+  res.json({
+    stati: STATI_VALIDI,
+    transizioni: MACCHINA_STATI,
+    descrizione: 'Sequenza consentita: ricevuta -> valutata -> assegnata -> in_intervento -> risolta -> chiusa'
+  });
+});
+
 // Gestione degli errori del database
 function gestisciErrore(err, res) {
   console.error('Errore:', err.message);
@@ -13,11 +31,23 @@ function gestisciErrore(err, res) {
   res.status(500).json({ errore: 'Errore interno del server' });
 }
 
+function validaTransizione(statoCorrente, nuovoStato) {
+  const transizioniConsentite = MACCHINA_STATI[statoCorrente] || [];
+  if (!transizioniConsentite.includes(nuovoStato)) {
+    throw new Error(
+      `Transizione non valida: ${statoCorrente} -> ${nuovoStato}. ` +
+      `Stati consentiti: ${transizioniConsentite.join(', ') || 'nessuno'}`
+    );
+  }
+}
+
 // CREATE - crea una nuova segnalazione
 router.post('/', async (req, res) => {
   const { titolo, descrizione, indirizzo, latitudine, longitudine,
           priorita, canale, id_utente, id_area, id_categoria } = req.body;
 
+  // TODO: sostituire con l'utente autenticato quando sarà disponibile il sistema di login.
+  // Per ora id_utente arriva dal body e non è affidabile come identificativo reale dell'utente.
   if (!titolo || !id_utente || !id_area) {
     return res.status(400).json({ errore: 'titolo, id_utente e id_area sono obbligatori' });
   }
@@ -61,23 +91,50 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-// UPDATE - cambia lo stato
+// UPDATE - cambia lo stato secondo la macchina a stati consentita
 router.patch('/:id/stato', async (req, res) => {
   const { stato } = req.body;
-  if (!stato) return res.status(400).json({ errore: 'stato obbligatorio' });
+
+  if (!stato || typeof stato !== 'string') {
+    return res.status(400).json({ errore: 'stato obbligatorio' });
+  }
+
+  const nuovoStato = stato.trim();
+
+  if (!STATI_VALIDI.includes(nuovoStato)) {
+    return res.status(400).json({ errore: `stato non valido: ${nuovoStato}` });
+  }
 
   try {
+    const segnalazione = await pool.query(
+      'SELECT id, stato FROM segnalazione WHERE id = $1',
+      [req.params.id]
+    );
+
+    if (segnalazione.rows.length === 0) {
+      return res.status(404).json({ errore: 'Segnalazione non trovata' });
+    }
+
+    const statoCorrente = segnalazione.rows[0].stato;
+
+    try {
+      validaTransizione(statoCorrente, nuovoStato);
+    } catch (err) {
+      return res.status(400).json({ errore: err.message });
+    }
+
     const risultato = await pool.query(
       `UPDATE segnalazione
          SET stato = $1::varchar,
-             chiusa_il = CASE WHEN $1::varchar = 'chiusa' THEN now() ELSE NULL END
+             chiusa_il = CASE
+               WHEN $1::varchar = 'chiusa' THEN COALESCE(chiusa_il, now())
+               ELSE NULL
+             END
        WHERE id = $2
        RETURNING *`,
-      [stato, req.params.id]
+      [nuovoStato, req.params.id]
     );
-    if (risultato.rows.length === 0) {
-      return res.status(404).json({ errore: 'Segnalazione non trovata' });
-    }
+
     res.json(risultato.rows[0]);
   } catch (err) {
     gestisciErrore(err, res);

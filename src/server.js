@@ -30,4 +30,4 @@ async function avvia() {
   }
 }
 
-avvia();
+avvia();

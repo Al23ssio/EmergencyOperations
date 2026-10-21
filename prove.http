@@ -19,8 +19,59 @@ GET http://localhost:3000/segnalazioni
 ### 3. LEGGI la segnalazione numero 1
 GET http://localhost:3000/segnalazioni/1
 
-### 4. AGGIORNA lo stato
+### 4. OTTENGI gli stati consentiti
+GET http://localhost:3000/segnalazioni/stati
+
+### 5. AGGIORNA lo stato a valutata (transizione valida)
 PATCH http://localhost:3000/segnalazioni/1/stato
 Content-Type: application/json
 
 { "stato": "valutata" }
+
+### 6. AGGIORNA lo stato a assegnata (transizione valida)
+PATCH http://localhost:3000/segnalazioni/1/stato
+Content-Type: application/json
+
+{ "stato": "assegnata" }
+
+### 7. AGGIORNA lo stato a in_intervento (transizione valida)
+PATCH http://localhost:3000/segnalazioni/1/stato
+Content-Type: application/json
+
+{ "stato": "in_intervento" }
+
+### 8. AGGIORNA lo stato a risolta (transizione valida)
+PATCH http://localhost:3000/segnalazioni/1/stato
+Content-Type: application/json
+
+{ "stato": "risolta" }
+
+### 9. AGGIORNA lo stato a chiusa (transizione valida)
+PATCH http://localhost:3000/segnalazioni/1/stato
+Content-Type: application/json
+
+{ "stato": "chiusa" }
+
+### 10. TENTATIVO DI TRANSIZIONE NON VALIDA: ricevuta -> chiusa
+PATCH http://localhost:3000/segnalazioni/1/stato
+Content-Type: application/json
+
+{ "stato": "chiusa" }
+
+### 11. TENTATIVO DI TRANSIZIONE NON VALIDA: valutata -> risolta
+PATCH http://localhost:3000/segnalazioni/1/stato
+Content-Type: application/json
+
+{ "stato": "risolta" }
+
+### 12. TENTATIVO DI STATO NON VALIDO
+PATCH http://localhost:3000/segnalazioni/1/stato
+Content-Type: application/json
+
+{ "stato": "pending" }
+
+### 13. TENTATIVO DI STATO MANCANTE
+PATCH http://localhost:3000/segnalazioni/1/stato
+Content-Type: application/json
+
+{}
