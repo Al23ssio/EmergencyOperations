@@ -147,3 +147,23 @@ Limite noto:
 ## Come contribuire
 
 Branch strategy, convenzioni di commit e Definition of Done sono in [`CONTRIBUTING.md`](./CONTRIBUTING.md) — leggetelo prima di aprire il primo branch.
+
+## Immagine Docker
+
+Il backend (API + frontend statico) è containerizzato con il `Dockerfile` nella cartella principale.
+
+| | |
+| :---- | :---- |
+| **Immagine** | `localhost:32000/emergency-operations-backend:1.0.0` |
+| **Porta** | `3000` |
+| **Variabili richieste** | `DB_HOST`, `DB_PORT`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB` |
+| **Health check** | `GET /health` |
+
+Build e push:
+
+    docker build -t emergency-operations-backend:1.0.0 .
+    docker tag emergency-operations-backend:1.0.0 localhost:32000/emergency-operations-backend:1.0.0
+    docker push localhost:32000/emergency-operations-backend:1.0.0
+
+Il database usa l'immagine ufficiale `postgres:16`.
+Ad ogni nuova versione si incrementa il tag (1.0.1, 1.1.0, ...): non si sovrascrive mai un tag già pubblicato.
