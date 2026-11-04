@@ -1,27 +1,17 @@
+# Progetto: Emergency Operations  ·  Team: Emergency Operations  ·  Data: 04/11/2026  ·  v1.1
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: emergency-ops-ingress
-  annotations:
-    nginx.ingress.kubernetes.io/rewrite-target: /$2
 spec:
   rules:
-  - host: emergency-operations.local
-    http:
-      paths:
-      # Rotta per le API dirette al backend Node.js (Porta 3000)
-      - path: /api(/|$)(.*)
-        pathType: Prefix
-        backend:
-          service:
-            name: emergency-ops-backend
-            port:
-              number: 3000
-      # Rotta per la root diretta al frontend
-      - path: /()(.*)
-        pathType: Prefix
-        backend:
-          service:
-            name: emergency-ops-backend
-            port:
-              number: 80
+    - host: emergency-operations.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: emergency-ops-backend
+                port:
+                  number: 3000
