@@ -36,3 +36,36 @@ Quando lo stato aggiornato è `chiusa`, il campo `chiusa_il` viene impostato a `
 ## Nota sul limite attuale
 
 Il campo `id_utente` è ancora ricevuto nel body della richiesta, perché il sistema di autenticazione non è stato implementato. Questo è un limite temporaneo: in futuro l'ID dell'utente autenticato dovrà essere preso dal token/sessione e non più dal payload della richiesta.
+
+---
+
+### GET /health
+Verifica lo stato di salute del servizio backend e della connessione al database.
+
+* **Metodo:** `GET`
+* **URL:** `/health`
+* **Risposta di Successo:**
+  * **Codice:** `200 OK`
+  * **Contenuto:**
+    ```json
+    {
+      "status": "UP",
+      "database": "CONNECTED"
+    }
+    ```
+
+---
+
+### GET /segnalazioni/stati
+Restituisce l'elenco di tutti gli stati possibili che una segnalazione può assumere.
+
+* **Metodo:** `GET`
+* **URL:** `/segnalazioni/stati`
+* **Risposta di Successo:**
+  * **Codice:** `200 OK`
+  * **Contenuto:**
+    ```json
+    {
+      "stati": ["NUOVA", "IN_CORSO", "RISOLTA", "ARCHIVIATA"]
+    }
+    ```
