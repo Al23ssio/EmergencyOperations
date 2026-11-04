@@ -1,0 +1,12 @@
+# Progetto: Emergency Operations  ·  Team: Emergency Operations  ·  Data: 04/11/2026  ·  v0.1
+apiVersion: v1
+kind: Service
+metadata:
+  name: emergency-ops-backend
+spec:
+  selector:
+    app: backend
+  ports:
+    - port: 3000
+      targetPort: 3000
+  type: ClusterIP
