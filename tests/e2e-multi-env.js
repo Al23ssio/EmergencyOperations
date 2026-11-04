@@ -15,6 +15,7 @@ async function runE2E() {
   }
   console.log(`[OK] 2. Backend -> Database connesso (env: ${healthData.environment}, CORS: ${healthData.corsOrigin})`);
 
+  // Inseriamo titolo, id_utente e id_area come richiesto dal validatore del backend
   const createRes = await fetch(`${BASE_URL}/segnalazioni`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -22,12 +23,17 @@ async function runE2E() {
       titolo: 'Test E2E Multi-Ambiente',
       descrizione: 'Verifica flusso Frontend -> Backend -> Database',
       priorita: 'alta',
-      luogo: 'Via Roma 1, Milano'
+      luogo: 'Via Roma 1, Milano',
+      id_utente: 1,
+      id_area: 1
     })
   });
+  
   if (createRes.status !== 201) {
-    throw new Error(`Creazione segnalazione fallita: HTTP ${createRes.status}`);
+    const errBody = await createRes.text();
+    throw new Error(`Creazione segnalazione fallita (HTTP ${createRes.status}): ${errBody}`);
   }
+  
   const creata = await createRes.json();
   console.log(`[OK] 3. Creazione segnalazione su DB riuscita (ID: ${creata.id})`);
 
@@ -41,11 +47,14 @@ async function runE2E() {
   const patchRes = await fetch(`${BASE_URL}/segnalazioni/${creata.id}/stato`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ stato: 'in_lavorazione' })
+    body: JSON.stringify({ stato: 'valutata' })
   });
+  
   if (!patchRes.ok) {
-    throw new Error(`Aggiornamento stato fallito: HTTP ${patchRes.status}`);
+    const errPatch = await patchRes.text();
+    throw new Error(`Aggiornamento stato fallito (HTTP ${patchRes.status}): ${errPatch}`);
   }
+  
   console.log(`[OK] 5. Aggiornamento stato segnalazione ID ${creata.id} completato`);
   console.log('=== TUTTI I TEST END-TO-END SONO PASSATI CON SUCCESSO ===');
 }
