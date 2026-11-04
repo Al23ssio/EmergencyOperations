@@ -14,7 +14,7 @@ spec:
         pathType: Prefix
         backend:
           service:
-            name: backend-svc
+            name: emergency-ops-backend
             port:
               number: 3000
       # Rotta per la root diretta al frontend

@@ -10,7 +10,7 @@ metadata:
 data:
   # Parametri di configurazione runtime dell'applicazione backend
   PORT: "3000"
-  DB_HOST: "db-svc"
+  DB_HOST: "postgres-service"
   DB_PORT: "5432"
   POSTGRES_DB: "segnalazioni"
   NODE_ENV: "production"
