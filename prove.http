@@ -75,3 +75,51 @@ PATCH http://localhost:3000/segnalazioni/1/stato
 Content-Type: application/json
 
 {}
+
+### ============================================================================
+### AMBIENTE DEV (config/dev.env -> Porta 3000)
+### ============================================================================
+
+### 1. [DEV] Verifica Frontend statico
+GET http://localhost:3000/
+
+### 2. [DEV] Health Check (Backend + Database + CORS)
+GET http://localhost:3000/health
+
+### 3. [DEV] Lista segnalazioni (Backend -> Database)
+GET http://localhost:3000/segnalazioni
+
+### 4. [DEV] Crea nuova segnalazione (Frontend -> Backend -> Database)
+POST http://localhost:3000/segnalazioni
+Content-Type: application/json
+
+{
+  "titolo": "Allagamento sottopasso [DEV]",
+  "descrizione": "Test end-to-end in ambiente di sviluppo",
+  "priorita": "alta",
+  "luogo": "Via Torino 12"
+}
+
+### ============================================================================
+### AMBIENTE TEST (config/test.env -> Porta 8080)
+### ============================================================================
+
+### 1. [TEST] Verifica Frontend statico
+GET http://localhost:8080/
+
+### 2. [TEST] Health Check (Backend + Database + CORS)
+GET http://localhost:8080/health
+
+### 3. [TEST] Lista segnalazioni (Backend -> Database)
+GET http://localhost:8080/segnalazioni
+
+### 4. [TEST] Crea nuova segnalazione (Frontend -> Backend -> Database)
+POST http://localhost:8080/segnalazioni
+Content-Type: application/json
+
+{
+  "titolo": "Albero pericolante [TEST]",
+  "descrizione": "Test end-to-end in ambiente di test con stessa immagine Docker",
+  "priorita": "media",
+  "luogo": "Piazza Garibaldi 4"
+}
