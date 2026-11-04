@@ -1,2 +1,6 @@
 .env
 node_modules
+
+# File di ambiente con secret reali
+.env
+config/dev.env
