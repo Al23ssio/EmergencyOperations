@@ -1,6 +1,6 @@
-// Operazioni sulle segnalazioni: crea, leggi, aggiorna
+// Operazioni sulle segnalazioni: crea, leggi, aggiorna, note, assegnazioni e storico
 const express = require('express');
-const pool = require('./db');
+const pool = require('./db'); // o '../db' a seconda della struttura cartelle
 
 const router = express.Router();
 
@@ -46,8 +46,6 @@ router.post('/', async (req, res) => {
   const { titolo, descrizione, indirizzo, latitudine, longitudine,
           priorita, canale, id_utente, id_area, id_categoria } = req.body;
 
-  // TODO: sostituire con l'utente autenticato quando sarà disponibile il sistema di login.
-  // Per ora id_utente arriva dal body e non è affidabile come identificativo reale dell'utente.
   if (!titolo || !id_utente || !id_area) {
     return res.status(400).json({ errore: 'titolo, id_utente e id_area sono obbligatori' });
   }
@@ -91,9 +89,9 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-// UPDATE - cambia lo stato secondo la macchina a stati consentita
+// UPDATE - cambia lo stato secondo la macchina a stati consentita E salva lo storico
 router.patch('/:id/stato', async (req, res) => {
-  const { stato } = req.body;
+  const { stato, id_utente, note } = req.body;
 
   if (!stato || typeof stato !== 'string') {
     return res.status(400).json({ errore: 'stato obbligatorio' });
@@ -105,13 +103,17 @@ router.patch('/:id/stato', async (req, res) => {
     return res.status(400).json({ errore: `stato non valido: ${nuovoStato}` });
   }
 
+  const client = await pool.connect();
   try {
-    const segnalazione = await pool.query(
-      'SELECT id, stato FROM segnalazione WHERE id = $1',
+    await client.query('BEGIN');
+
+    const segnalazione = await client.query(
+      'SELECT id, stato FROM segnalazione WHERE id = $1 FOR UPDATE',
       [req.params.id]
     );
 
     if (segnalazione.rows.length === 0) {
+      await client.query('ROLLBACK');
       return res.status(404).json({ errore: 'Segnalazione non trovata' });
     }
 
@@ -120,10 +122,12 @@ router.patch('/:id/stato', async (req, res) => {
     try {
       validaTransizione(statoCorrente, nuovoStato);
     } catch (err) {
+      await client.query('ROLLBACK');
       return res.status(400).json({ errore: err.message });
     }
 
-    const risultato = await pool.query(
+    // Aggiorna stato
+    const risultato = await client.query(
       `UPDATE segnalazione
          SET stato = $1::varchar,
              chiusa_il = CASE
@@ -135,7 +139,109 @@ router.patch('/:id/stato', async (req, res) => {
       [nuovoStato, req.params.id]
     );
 
+    // Registra nello storico_modifica
+    await client.query(
+      `INSERT INTO storico_modifica (id_segnalazione, id_utente, stato_precedente, stato_nuovo, note)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [req.params.id, id_utente || null, statoCorrente, nuovoStato, note || null]
+    );
+
+    await client.query('COMMIT');
     res.json(risultato.rows[0]);
+  } catch (err) {
+    await client.query('ROLLBACK');
+    gestisciErrore(err, res);
+  } finally {
+    client.release();
+  }
+});
+
+// NOTE - Aggiungi nota a una segnalazione
+router.post('/:id/note', async (req, res) => {
+  const { id_utente, testo } = req.body;
+  const id_segnalazione = req.params.id;
+
+  if (!testo) {
+    return res.status(400).json({ errore: 'Il testo della nota è obbligatorio' });
+  }
+
+  try {
+    // Verifica esistenza segnalazione
+    const chk = await pool.query('SELECT id FROM segnalazione WHERE id = $1', [id_segnalazione]);
+    if (chk.rows.length === 0) {
+      return res.status(404).json({ errore: 'Segnalazione non trovata' });
+    }
+
+    const risultato = await pool.query(
+      `INSERT INTO nota (id_segnalazione, id_utente, testo)
+       VALUES ($1, $2, $3)
+       RETURNING *`,
+      [id_segnalazione, id_utente || null, testo]
+    );
+
+    res.status(201).json(risultato.rows[0]);
+  } catch (err) {
+    gestisciErrore(err, res);
+  }
+});
+
+// NOTE - Leggi note di una segnalazione
+router.get('/:id/note', async (req, res) => {
+  try {
+    const risultato = await pool.query(
+      `SELECT n.*, u.nome, u.cognome 
+       FROM nota n
+       LEFT JOIN utente u ON n.id_utente = u.id
+       WHERE n.id_segnalazione = $1
+       ORDER BY n.data_ora ASC`,
+      [req.params.id]
+    );
+    res.json(risultato.rows);
+  } catch (err) {
+    gestisciErrore(err, res);
+  }
+});
+
+// ASSEGNAZIONE - Assegna segnalazione a utente o squadra
+router.post('/:id/assegna', async (req, res) => {
+  const { id_utente_assegnato, id_squadra, id_utente_assegnatore } = req.body;
+  const id_segnalazione = req.params.id;
+
+  if (!id_utente_assegnato && !id_squadra) {
+    return res.status(400).json({ errore: 'Specificare id_utente_assegnato o id_squadra' });
+  }
+
+  try {
+    const chk = await pool.query('SELECT id FROM segnalazione WHERE id = $1', [id_segnalazione]);
+    if (chk.rows.length === 0) {
+      return res.status(404).json({ errore: 'Segnalazione non trovata' });
+    }
+
+    const risultato = await pool.query(
+      `INSERT INTO assegnazione (id_segnalazione, id_utente_assegnato, id_squadra, id_utente_assegnatore)
+       VALUES ($1, $2, $3, $4)
+       RETURNING *`,
+      [id_segnalazione, id_utente_assegnato || null, id_squadra || null, id_utente_assegnatore || null]
+    );
+
+    res.status(201).json(risultato.rows[0]);
+  } catch (err) {
+    gestisciErrore(err, res);
+  }
+});
+
+// STORICO - Leggi lo storico delle modifiche di una segnalazione
+router.get('/:id/storico', async (req, res) => {
+  try {
+    const risultato = await pool.query(
+      `SELECT s.*, u.nome, u.cognome 
+       FROM storico_modifica s
+       LEFT JOIN utente u ON s.id_utente = u.id
+       WHERE s.id_segnalazione = $1
+       ORDER BY s.data_ora DESC`,
+      [req.params.id]
+    );
+    res.json(risultato.rows);
   } catch (err) {
     gestisciErrore(err, res);
   }
