@@ -234,3 +234,4 @@ test('GET /segnalazioni/stati - Controllo completo struttura dati', async () => 
   assert.strictEqual(body.transizioni.ricevuta[0], 'valutata');
   assert.ok(Array.isArray(body.transizioni.chiusa));
 });
+
