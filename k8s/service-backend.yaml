@@ -1,4 +1,3 @@
-# Progetto: Emergency Operations  ·  Team: Emergency Operations  ·  Data: 04/11/2026  ·  v0.1
 apiVersion: v1
 kind: Service
 metadata:
