@@ -69,19 +69,29 @@ Il Deployment del database riceve lo stesso ConfigMap e lo stesso Secret: l'imma
 ## 3. Guasto diagnosticato nell'ambiente TEST
 
 Metodo in 5 fasi: **Sintomo → Ipotesi → Verifica → Causa → Correzione**.
-Comandi eseguiti su MicroK8s (`microk8s kubectl …`, abbreviato `kubectl`).
+
+**Ambiente della prova:** cluster Kubernetes locale a un nodo (Docker Desktop, kubeadm, Kubernetes v1.34.1), con la stessa immagine `localhost:32000/emergency-operations-backend:1.0.0` e gli stessi manifest di `k8s/`. Su MicroK8s i comandi sono gli stessi, preceduti da `microk8s` (`microk8s kubectl …`).
+
+**Avvio di TEST con la configurazione che conteneva il guasto** (il ConfigMap di TEST com'era su `main`):
+```
+git show main:k8s/configmap-test.yaml | kubectl apply -f -
+kubectl apply -f k8s/secret-example.yaml -f k8s/service-db.yaml -f k8s/deployment-db.yaml
+kubectl apply -f k8s/service-backend.yaml -f k8s/deployment-backend.yaml
+```
 
 ### 3.1 Sintomo
 
-Dopo `kubectl apply -f k8s/configmap-test.yaml` e il riavvio del backend, in TEST l'applicazione **non risponde**, mentre in DEV, con la **stessa immagine**, funziona.
+Il database parte, ma i pod del backend **non diventano mai pronti** (0/1) e vengono riavviati di continuo:
 
 ```
 kubectl get pods
-NAME                       READY   STATUS    RESTARTS
-backend-xxxxxxxxxx-xxxxx   0/1     Running   4
+NAME                       READY   STATUS    RESTARTS      AGE
+backend-5bc9b8c68-4jtmn    0/1     Running   2 (60s ago)   3m21s
+backend-5bc9b8c68-d4fmk    0/1     Running   2 (60s ago)   3m21s
+db-b7c68d8d-lkhvg          1/1     Running   0             4m3s
 ```
 
-I pod del backend restano **0/1 (non Ready)** e il contatore `RESTARTS` cresce. Il Service `emergency-ops-backend` non ha endpoint, quindi `curl` e il browser ricevono un errore.
+Poiché nessun pod è Ready, il Service `emergency-ops-backend` non ha endpoint a cui inoltrare le richieste: l'applicazione in TEST non risponde.
 
 ### 3.2 Ipotesi
 
@@ -89,7 +99,7 @@ I pod del backend restano **0/1 (non Ready)** e il contatore `RESTARTS` cresce. 
 | :---: | :---- | :---- |
 | H1 | Il backend non si collega al database (host, nome DB o credenziali errati) | In TEST cambiano `POSTGRES_DB` e il ConfigMap |
 | H2 | Manca una variabile obbligatoria e il processo esce subito (fail-fast) | Il codice esce con codice 1 se manca una variabile |
-| H3 | Il backend ascolta su una porta diversa da quella attesa da probe e Service | È l'unico valore "di rete" che cambia tra DEV e TEST |
+| H3 | Il backend ascolta su una porta diversa da quella attesa da probe e Service | È un valore che cambia tra DEV e TEST |
 | H4 | Errore CORS | `CORS_ORIGIN` è diverso in TEST |
 
 ### 3.3 Verifica
@@ -97,58 +107,75 @@ I pod del backend restano **0/1 (non Ready)** e il contatore `RESTARTS` cresce. 
 **1. Log del container**
 ```
 kubectl logs deploy/backend
+Found 2 pods, using pod/backend-5bc9b8c68-4jtmn
 Database connesso
 Server avviato sulla porta 8080
 ```
 → Il database è raggiungibile e non manca nessuna variabile: **H1 e H2 scartate**. Il server però parte sulla porta **8080**.
 
-**2. Eventi del pod**
+**2. Eventi del pod** (`kubectl describe pod -l app=backend`, sezione Events)
 ```
-kubectl describe pod -l app=backend
-Warning  Unhealthy  Readiness probe failed: Get "http://<ip-pod>:3000/health": dial tcp <ip-pod>:3000: connect: connection refused
-Warning  Unhealthy  Liveness probe failed:  Get "http://<ip-pod>:3000/health": dial tcp <ip-pod>:3000: connect: connection refused
+Normal   Pulled     Container image "localhost:32000/emergency-operations-backend:1.0.0" already present on machine
+Normal   Started    Started container backend
+Warning  Unhealthy  Liveness probe failed: Get "http://10.1.0.7:3000/health": dial tcp 10.1.0.7:3000: connect: connection refused
 Normal   Killing    Container backend failed liveness probe, will be restarted
+Warning  Unhealthy  (x11 over 48s) Readiness probe failed: Get "http://10.1.0.7:3000/health": dial tcp 10.1.0.7:3000: connect: connection refused
 ```
-→ Kubernetes controlla `/health` sulla porta **3000**, ma lì non ascolta nessuno: il pod non diventa mai Ready e viene riavviato di continuo.
+→ Kubernetes controlla `/health` sulla porta **3000**, ma su quella porta non ascolta nessuno: la readiness probe fallisce (il pod non è Ready) e la liveness probe fallisce (il container viene riavviato).
 
-**3. Variabili realmente iniettate**
+**3. Variabili realmente iniettate** (estratto; la password del Secret è omessa)
 ```
-kubectl exec deploy/backend -- env | grep -E "PORT|NODE_ENV"
+kubectl exec deploy/backend -- env
 PORT=8080
+DB_HOST=postgres-service
 DB_PORT=5432
+POSTGRES_DB=emergency_test
 NODE_ENV=test
+CORS_ORIGIN=https://test.emergencyoperations.it
+EMERGENCY_OPS_BACKEND_SERVICE_PORT=3000
 ```
+→ Il container riceve **`PORT=8080`**, mentre il Service del backend espone la **3000**. Le variabili del database sono corrette.
 
-**4. Prova di rete**
-```
-kubectl port-forward deploy/backend 8080:8080
-curl http://localhost:8080/health
-{"server":"ok","database":"ok","environment":"test",...}
-```
-→ Sulla porta 8080 il backend risponde correttamente: l'applicazione è sana, è sbagliata solo la porta. **H3 confermata**. H4 è scartata: il problema si presenta prima di qualsiasi richiesta dal browser, e il frontend è servito dalla stessa origine del backend.
+→ **H3 confermata.** H4 è scartata: il problema si presenta prima di qualsiasi richiesta dal browser, e il frontend è servito dalla stessa origine del backend.
 
 ### 3.4 Causa
 
-In `k8s/configmap-test.yaml` c'era **`PORT: "8080"`**, mentre `k8s/deployment-backend.yaml` (`containerPort`, `livenessProbe`, `readinessProbe`) e `k8s/service-backend.yaml` (`targetPort`) usano **3000**. Il manifest è lo stesso per i due ambienti, quindi l'unico valore discordante è nel ConfigMap di TEST.
+In `k8s/configmap-test.yaml` c'era **`PORT: "8080"`**, mentre `k8s/deployment-backend.yaml` (`containerPort`, `livenessProbe`, `readinessProbe`) e `k8s/service-backend.yaml` (`targetPort`) usano **3000**. Il backend legge `PORT` all'avvio e si mette in ascolto sulla 8080, dove Kubernetes non lo cerca.
 
-Si tratta di un **errore di configurazione, non di codice**: l'immagine è identica a quella di DEV, che funziona.
+È un **errore di configurazione, non di codice**: l'immagine è identica a quella di DEV, che funziona.
 
 ### 3.5 Correzione
 
 1. In `k8s/configmap-test.yaml`: `PORT: "8080"` → **`PORT: "3000"`**.
-2. Applicare la modifica e riavviare i pod, perché le variabili d'ambiente vengono lette solo all'avvio del container:
+2. Applicazione della modifica e riavvio dei pod, perché le variabili d'ambiente vengono lette solo all'avvio del container:
    ```
    kubectl apply -f k8s/configmap-test.yaml
+   configmap/backend-config configured
+
    kubectl rollout restart deployment/backend
+   deployment.apps/backend restarted
    ```
 3. Verifica dopo la correzione:
    ```
-   kubectl get pods                 → backend 1/1 Running, RESTARTS stabili
-   kubectl logs deploy/backend      → Server avviato sulla porta 3000
-   curl http://emergency-operations.local/health → {"server":"ok","database":"ok","environment":"test",...}
+   kubectl logs deploy/backend
+   Database connesso
+   Server avviato sulla porta 3000
+
+   kubectl get pods
+   NAME                        READY   STATUS    RESTARTS   AGE
+   backend-555f8fcb9d-8d42w    1/1     Running   0          2m10s
+   backend-555f8fcb9d-f8fks    1/1     Running   0          2m1s
+   db-b7c68d8d-lkhvg           1/1     Running   0          6m6s
+
+   kubectl port-forward svc/emergency-ops-backend 3000:3000      (in un secondo terminale)
+   curl.exe http://localhost:3000/health
+   {"server":"ok","database":"ok","environment":"test","corsOrigin":"https://test.emergencyoperations.it"}
    ```
+   → I pod nuovi sono **Ready (1/1)** con **0 riavvii**, e la chiamata reale attraverso il Service raggiunge backend e database in ambiente **test**. Guasto risolto.
 
 **Come evitarlo in futuro:** `PORT` è un valore **interno al container**. Per esporre TEST su un'altra porta o su un altro indirizzo si cambia il Service o l'Ingress, non la porta dell'applicazione. Così `containerPort`, probe e `targetPort` restano sempre allineati a 3000.
+
+**Nota di sicurezza:** `kubectl exec … env` mostra anche i valori del Secret in chiaro. Negli screenshot o nei report vanno mostrate solo le variabili utili alla diagnosi.
 
 ---
 
