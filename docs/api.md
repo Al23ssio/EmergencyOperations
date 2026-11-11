@@ -49,8 +49,9 @@ Verifica lo stato di salute del servizio backend e della connessione al database
   * **Contenuto:**
     ```json
     {
-      "status": "UP",
-      "database": "CONNECTED"
+        "server": "ok",
+        "database": "ok",
+        "environment": "development"
     }
     ```
 
@@ -66,6 +67,20 @@ Restituisce l'elenco di tutti gli stati possibili che una segnalazione può assu
   * **Contenuto:**
     ```json
     {
-      "stati": ["NUOVA", "IN_CORSO", "RISOLTA", "ARCHIVIATA"]
+        "stati": [
+          "ricevuta",
+          "valutata",
+          "assegnata",
+          "in_intervento",
+          "risolta",
+          "chiusa"
+  ],
+        "transizioni": {
+        "ricevuta": ["valutata", "chiusa"],
+        "valutata": ["assegnata", "chiusa"],
+       "assegnata": ["in_intervento", "valutata"],
+        "in_intervento": ["risolta"],
+        "risolta": ["chiusa", "in_intervento"],
+        "chiusa": []
+  }
     }
-    ```
