@@ -27,6 +27,7 @@ function gestisciErrore(err, res) {
   console.error('Errore:', err.message);
   if (err.code === '23514') return res.status(400).json({ errore: 'Valore non valido (stato, priorita o canale)' });
   if (err.code === '23503') return res.status(400).json({ errore: 'Utente, area o categoria inesistente' });
+  if (err.code === '23502') return res.status(400).json({ errore: 'Campo obbligatorio mancante' });
   if (err.code === '22P02') return res.status(400).json({ errore: 'Formato dei dati non valido' });
   res.status(500).json({ errore: 'Errore interno del server' });
 }
@@ -108,7 +109,7 @@ router.patch('/:id/stato', async (req, res) => {
     await client.query('BEGIN');
 
     const segnalazione = await client.query(
-      'SELECT id, stato FROM segnalazione WHERE id = $1 FOR UPDATE',
+      'SELECT id, stato, id_utente FROM segnalazione WHERE id = $1 FOR UPDATE',
       [req.params.id]
     );
 
@@ -118,6 +119,7 @@ router.patch('/:id/stato', async (req, res) => {
     }
 
     const statoCorrente = segnalazione.rows[0].stato;
+    const idUtenteStorico = id_utente || segnalazione.rows[0].id_utente;
 
     try {
       validaTransizione(statoCorrente, nuovoStato);
@@ -141,9 +143,9 @@ router.patch('/:id/stato', async (req, res) => {
 
     // Registra nello storico_modifica
     await client.query(
-      `INSERT INTO storico_modifica (id_segnalazione, id_utente, stato_precedente, stato_nuovo, note)
-       VALUES ($1, $2, $3, $4, $5)`,
-      [req.params.id, id_utente || null, statoCorrente, nuovoStato, note || null]
+      `INSERT INTO storico_modifica (tipo_evento, campo, valore_precedente, valore_nuovo, id_segnalazione, id_utente)
+       VALUES ('cambio_stato', 'stato', $1, $2, $3, $4)`,
+      [statoCorrente, nuovoStato, req.params.id, idUtenteStorico]
     );
 
     await client.query('COMMIT');
@@ -161,6 +163,10 @@ router.post('/:id/note', async (req, res) => {
   const { id_utente, testo } = req.body;
   const id_segnalazione = req.params.id;
 
+  if (!id_utente) {
+    return res.status(400).json({ errore: 'id_utente è obbligatorio' });
+  }
+
   if (!testo) {
     return res.status(400).json({ errore: 'Il testo della nota è obbligatorio' });
   }
@@ -176,7 +182,7 @@ router.post('/:id/note', async (req, res) => {
       `INSERT INTO nota (id_segnalazione, id_utente, testo)
        VALUES ($1, $2, $3)
        RETURNING *`,
-      [id_segnalazione, id_utente || null, testo]
+      [id_segnalazione, id_utente, testo]
     );
 
     res.status(201).json(risultato.rows[0]);
@@ -189,11 +195,11 @@ router.post('/:id/note', async (req, res) => {
 router.get('/:id/note', async (req, res) => {
   try {
     const risultato = await pool.query(
-      `SELECT n.*, u.nome, u.cognome 
+      `SELECT n.*, u.nome_cognome, n.creata_il AS data_ora
        FROM nota n
        LEFT JOIN utente u ON n.id_utente = u.id
        WHERE n.id_segnalazione = $1
-       ORDER BY n.data_ora ASC`,
+       ORDER BY n.creata_il ASC`,
       [req.params.id]
     );
     res.json(risultato.rows);
@@ -204,24 +210,26 @@ router.get('/:id/note', async (req, res) => {
 
 // ASSEGNAZIONE - Assegna segnalazione a utente o squadra
 router.post('/:id/assegna', async (req, res) => {
-  const { id_utente_assegnato, id_squadra, id_utente_assegnatore } = req.body;
+  const { id_squadra, id_utente_assegnatore } = req.body;
   const id_segnalazione = req.params.id;
 
-  if (!id_utente_assegnato && !id_squadra) {
-    return res.status(400).json({ errore: 'Specificare id_utente_assegnato o id_squadra' });
+  if (!id_squadra) {
+    return res.status(400).json({ errore: 'Specificare id_squadra' });
   }
 
   try {
-    const chk = await pool.query('SELECT id FROM segnalazione WHERE id = $1', [id_segnalazione]);
+    const chk = await pool.query('SELECT id, id_utente FROM segnalazione WHERE id = $1', [id_segnalazione]);
     if (chk.rows.length === 0) {
       return res.status(404).json({ errore: 'Segnalazione non trovata' });
     }
 
+    const idUtenteAssegnazione = id_utente_assegnatore || chk.rows[0].id_utente;
+
     const risultato = await pool.query(
-      `INSERT INTO assegnazione (id_segnalazione, id_utente_assegnato, id_squadra, id_utente_assegnatore)
-       VALUES ($1, $2, $3, $4)
+      `INSERT INTO assegnazione (id_segnalazione, id_squadra, id_utente)
+       VALUES ($1, $2, $3)
        RETURNING *`,
-      [id_segnalazione, id_utente_assegnato || null, id_squadra || null, id_utente_assegnatore || null]
+      [id_segnalazione, id_squadra, idUtenteAssegnazione]
     );
 
     res.status(201).json(risultato.rows[0]);
@@ -234,11 +242,11 @@ router.post('/:id/assegna', async (req, res) => {
 router.get('/:id/storico', async (req, res) => {
   try {
     const risultato = await pool.query(
-      `SELECT s.*, u.nome, u.cognome 
+      `SELECT s.*, u.nome_cognome, s."timestamp" AS data_ora
        FROM storico_modifica s
        LEFT JOIN utente u ON s.id_utente = u.id
        WHERE s.id_segnalazione = $1
-       ORDER BY s.data_ora DESC`,
+       ORDER BY s."timestamp" DESC`,
       [req.params.id]
     );
     res.json(risultato.rows);
