@@ -349,4 +349,97 @@ router.get('/:id/note', async (req, res) => {
     }
 });
 
+/**
+ * POST /segnalazioni/:id/note
+ * Inserisce una nuova nota associata a una segnalazione.
+ */
+router.post('/:id/note', async (req, res) => {
+    const { id } = req.params;
+    const { id_utente, testo } = req.body;
+
+    try {
+        // 1. Validazione dei campi obbligatori
+        if (
+            id_utente === undefined ||
+            id_utente === null ||
+            testo === undefined ||
+            testo === null ||
+            String(testo).trim() === ''
+        ) {
+            return res.status(400).json({
+                error: 'I campi id_utente e testo sono obbligatori.'
+            });
+        }
+
+        // 2. Verifica esistenza della segnalazione
+        const segnalazione = await pool.query(
+            'SELECT id FROM segnalazione WHERE id = $1',
+            [id]
+        );
+
+        if (segnalazione.rowCount === 0) {
+            return res.status(404).json({
+                error: 'Segnalazione non trovata.'
+            });
+        }
+
+        // 3. Inserimento della nota
+        const result = await pool.query(
+            `INSERT INTO nota (
+                id_segnalazione,
+                id_utente,
+                testo
+            )
+            VALUES ($1, $2, $3)
+            RETURNING *`,
+            [id, id_utente, testo.trim()]
+        );
+
+        // 4. Risposta
+        return res.status(201).json(result.rows[0]);
+
+    } catch (error) {
+        console.error('Errore durante l\'inserimento della nota:', error);
+
+        return res.status(500).json({
+            error: 'Errore interno durante l\'inserimento della nota.'
+        });
+    }
+});
+
+
+/**
+ * GET /segnalazioni/:id/note
+ * Recupera tutte le note associate a una segnalazione.
+ */
+router.get('/:id/note', async (req, res) => {
+    const { id } = req.params;
+
+    try {
+        // JOIN tra nota e utente usando la colonna u.nome_cognome
+        const result = await pool.query(
+            `SELECT
+                n.id,
+                n.testo,
+                n.data_creazione,
+                n.id_utente,
+                u.nome_cognome AS autore
+            FROM nota n
+            INNER JOIN utente u
+                ON n.id_utente = u.id
+            WHERE n.id_segnalazione = $1
+            ORDER BY n.data_creazione DESC`,
+            [id]
+        );
+
+        return res.status(200).json(result.rows);
+
+    } catch (error) {
+        console.error('Errore durante il recupero delle note:', error);
+
+        return res.status(500).json({
+            error: 'Errore interno durante il recupero delle note.'
+        });
+    }
+});
 module.exports = router;
