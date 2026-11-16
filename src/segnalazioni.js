@@ -128,18 +128,18 @@ router.patch('/:id/stato', async (req, res) => {
       return res.status(400).json({ errore: err.message });
     }
 
-    // Aggiorna stato
-    const risultato = await client.query(
-      `UPDATE segnalazione
-         SET stato = $1::varchar,
-             chiusa_il = CASE
-               WHEN $1::varchar = 'chiusa' THEN COALESCE(chiusa_il, now())
-               ELSE NULL
-             END
-       WHERE id = $2
-       RETURNING *`,
-      [nuovoStato, req.params.id]
-    );
+// Aggiorna stato
+const risultato = await client.query(
+  `UPDATE segnalazione
+      SET stato = $1::varchar,
+          chiusa_il = CASE
+            WHEN $1::varchar = 'chiusa' THEN COALESCE(chiusa_il, now())
+            ELSE NULL
+          END
+    WHERE id = $2
+    RETURNING *`,
+  [nuovoStato, req.params.id]
+);
 
     // Registra nello storico_modifica
     await client.query(
