@@ -13,6 +13,7 @@ DROP TABLE IF EXISTS
   suggerimento_ai, storico_modifica, nota, assegnazione, allegato,
   segnalazione, categoria, area, squadra_utente, squadra, utente, ruolo
 CASCADE;
+DROP FUNCTION IF EXISTS aggiorna_updated_at() CASCADE;
 
 -- ---------------------------------------------------------------------
 -- RUOLO(id, nome, descrizione)
@@ -24,7 +25,10 @@ CREATE TABLE ruolo (
 );
 
 -- ---------------------------------------------------------------------
--- UTENTE(id, username, email, password_hash, nome_cognome, attivo, id_ruolo)
+-- UTENTE(id, username, email, password_hash, nome_cognome, attivo, id_ruolo,
+--        created_at, updated_at)
+-- La password NON viene mai salvata in chiaro: password_hash contiene
+-- l'hash bcrypt (es. "$2b$10$..."), generato dal backend.
 -- ---------------------------------------------------------------------
 CREATE TABLE utente (
   id            SERIAL PRIMARY KEY,
@@ -33,8 +37,22 @@ CREATE TABLE utente (
   password_hash VARCHAR(255) NOT NULL,
   nome_cognome  VARCHAR(100),
   attivo        BOOLEAN NOT NULL DEFAULT TRUE,
-  id_ruolo      INT NOT NULL REFERENCES ruolo(id)
+  id_ruolo      INT NOT NULL REFERENCES ruolo(id),
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at    TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- Aggiorna da solo updated_at ogni volta che un utente viene modificato
+CREATE FUNCTION aggiorna_updated_at() RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = now();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_utente_updated_at
+  BEFORE UPDATE ON utente
+  FOR EACH ROW EXECUTE FUNCTION aggiorna_updated_at();
 
 -- ---------------------------------------------------------------------
 -- SQUADRA(id, nome, attiva)
@@ -202,10 +220,16 @@ INSERT INTO ruolo (nome, descrizione) VALUES
   ('responsabile',       'Consulta la situazione complessiva'),
   ('amministratore',     'Gestisce utenti e configurazioni');
 
+-- Utenti di prova, uno per ogni ruolo (piu una seconda squadra).
+-- Password di TUTTI gli utenti di prova: Password123!
+-- (qui c'e solo il suo hash bcrypt, mai la password in chiaro)
 INSERT INTO utente (username, email, password_hash, nome_cognome, id_ruolo) VALUES
-  ('mrossi',   'mario.rossi@example.com',   'da_sostituire', 'Mario Rossi',   2),
-  ('lbianchi', 'luca.bianchi@example.com',  'da_sostituire', 'Luca Bianchi',  3),
-  ('gverdi',   'giulia.verdi@example.com',  'da_sostituire', 'Giulia Verdi',  3);
+  ('mrossi',   'mario.rossi@example.com',   '$2b$10$/1Se2a3AayMGP.jlu3sIduMnmPG73mVha25r7AjJg0JVsF.zHLgvq', 'Mario Rossi',   2),
+  ('lbianchi', 'luca.bianchi@example.com',  '$2b$10$/1Se2a3AayMGP.jlu3sIduMnmPG73mVha25r7AjJg0JVsF.zHLgvq', 'Luca Bianchi',  3),
+  ('gverdi',   'giulia.verdi@example.com',  '$2b$10$/1Se2a3AayMGP.jlu3sIduMnmPG73mVha25r7AjJg0JVsF.zHLgvq', 'Giulia Verdi',  3),
+  ('aneri',    'anna.neri@example.com',     '$2b$10$/1Se2a3AayMGP.jlu3sIduMnmPG73mVha25r7AjJg0JVsF.zHLgvq', 'Anna Neri',     1),
+  ('pgialli',  'paolo.gialli@example.com',  '$2b$10$/1Se2a3AayMGP.jlu3sIduMnmPG73mVha25r7AjJg0JVsF.zHLgvq', 'Paolo Gialli',  4),
+  ('admin',    'admin@example.com',         '$2b$10$/1Se2a3AayMGP.jlu3sIduMnmPG73mVha25r7AjJg0JVsF.zHLgvq', 'Amministratore', 5);
 
 INSERT INTO squadra (nome) VALUES
   ('Squadra Nord'),
