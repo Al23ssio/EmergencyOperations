@@ -52,4 +52,4 @@ Le segnalazioni arrivano attraverso telefono, e-mail e diversi canali non coordi
 * **Ciclo di Vita (Stati):** Sequenza ordinata di stati attraverso cui passa un intervento: Ricevuta ➔ Valutata ➔ Assegnata ➔ In intervento ➔ Risolta ➔ Chiusa. 
 * **Squadra Operativa:** Unità di personale che opera fisicamente sul territorio incaricata di svolgere e aggiornare l'intervento. 
 * **Suggerimento IA:** Proposta automatizzata generata dall'Intelligenza Artificiale per classificare categoria e priorità in base al testo inserito, soggetta a validazione umana. 
-* **Health Check:** Interfaccia/Endpoint software che restituisce lo stato di salute di un microservizio, del database o delle integrazioni esterne.
+* **Health Check:** Interfaccia/Endpoint software che restituisce lo stato di salute di un microservizio, del database o delle integrazioni esterne.npm s
