@@ -1,5 +1,6 @@
 const express = require('express');
 const pool = require('./db');
+const authRoutes = require('./auth');
 
 // --- PASSO 1: CONTROLLO E VALIDAZIONE VARIABILI D'AMBIENTE ---
 const REQUIRED_ENV = ['DB_HOST', 'POSTGRES_DB', 'POSTGRES_USER', 'POSTGRES_PASSWORD'];
@@ -15,6 +16,7 @@ if (missingEnv.length > 0) {
 const app = express();
 app.use(express.json());
 app.use('/segnalazioni', require('./segnalazioni'));
+app.use('/api/auth', authRoutes);
 app.use(express.static('public'));
 
 // Controllo di salute: dice se il server e il database funzionano

@@ -75,3 +75,22 @@ PATCH http://localhost:3000/segnalazioni/1/stato
 Content-Type: application/json
 
 {}
+
+
+### Test Login (successo)
+POST http://localhost:3000/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "admin",
+  "password": "password123"
+}
+
+### Test Login (errore)
+POST http://localhost:3000/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "admin",
+  "password": "sbagliata"
+}
