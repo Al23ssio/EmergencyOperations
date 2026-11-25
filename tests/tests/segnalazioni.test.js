@@ -1,7 +1,7 @@
 const request = require('supertest');
 const express = require('express');
-const segnalazioniRouter = require('../src/segnalazioni');
-const pool = require('../src/db');
+const segnalazioniRouter = require('../../src/segnalazioni');
+const pool = require('../../src/db');
 
 jest.mock('../src/db');
 
