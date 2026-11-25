@@ -1,5 +1,6 @@
 const express = require('express');
 const pool = require('./db');
+const authRoutes = require('./auth');
 
 const REQUIRED_ENV = ['DB_HOST', 'POSTGRES_DB', 'POSTGRES_USER', 'POSTGRES_PASSWORD'];
 
@@ -26,6 +27,7 @@ app.use((req, res, next) => {
 });
 
 app.use('/segnalazioni', require('./segnalazioni'));
+app.use('/api/auth', authRoutes);
 app.use(express.static('public'));
 
 app.get('/health', async (req, res) => {
