@@ -102,6 +102,9 @@ body {
 .role-badge[data-role="operatore"]    { background-color: #2980b9; }
 .role-badge[data-role="squadra"]      { background-color: #e67e22; }
 .role-badge[data-role="responsabile"] { background-color: #c0392b; }
+.role-badge[data-role="segnalatore"]        { background-color: #7f8c8d; }
+.role-badge[data-role="operatore_centrale"] { background-color: #2980b9; }
+.role-badge[data-role="amministratore"]     { background-color: #8e44ad; }
 
 .btn-sm {
   padding: 0.4rem 0.9rem;
