@@ -8,18 +8,71 @@
 </head>
 <body>
   <header class="navbar">
-    <h1>Emergency Operations</h1>
-    <div class="system-status">
-      <span class="status-badge" id="server-status">Server: Checking...</span>
-      <span class="status-badge" id="db-status">DB: Checking...</span>
+    <div class="navbar-left">
+      <h1>Emergency Operations</h1>
+      <div class="system-status">
+        <span class="status-badge" id="server-status">Server: Checking...</span>
+        <span class="status-badge" id="db-status">DB: Checking...</span>
+      </div>
+    </div>
+
+    <!-- Stato Utente / Login nella Navbar -->
+    <div class="navbar-auth">
+      <div id="auth-guest-view" class="auth-controls">
+        <span class="auth-guest-label">Ospite (sola lettura)</span>
+        <button type="button" id="btn-open-login" class="btn btn-secondary btn-sm">Accedi</button>
+      </div>
+
+      <div id="auth-user-view" class="auth-controls hidden">
+        <span class="user-info">
+          <strong id="current-user-name">-</strong>
+          <span id="current-user-role" class="role-badge">-</span>
+        </span>
+        <button type="button" id="btn-logout" class="btn btn-outline-light btn-sm">Logout</button>
+      </div>
     </div>
   </header>
 
+  <!-- BANNER GLOBALE PER ERRORI DI PERMESSO (403 Forbidden) -->
+  <div id="rbac-alert" class="rbac-alert hidden" role="alert">
+    <span id="rbac-alert-message">Permessi insufficienti per eseguire questa operazione.</span>
+    <button type="button" id="btn-close-rbac-alert" aria-label="Chiudi">&times;</button>
+  </div>
+
+  <!-- MODALE DI LOGIN -->
+  <div id="login-modal" class="auth-modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="login-title">
+    <div class="auth-modal-card">
+      <div class="auth-modal-header">
+        <h2 id="login-title">Accesso Operativo</h2>
+        <button type="button" id="btn-close-login" class="btn-close-modal" aria-label="Chiudi">&times;</button>
+      </div>
+
+      <form id="login-form" novalidate>
+        <div class="form-group">
+          <label for="login-identifier">Email o Username *</label>
+          <input type="text" id="login-identifier" name="identifier" required autocomplete="username" placeholder="es. mrossi o mario.rossi@ente.it">
+        </div>
+
+        <div class="form-group">
+          <label for="login-password">Password *</label>
+          <input type="password" id="login-password" name="password" required autocomplete="current-password" placeholder="••••••••">
+        </div>
+
+        <div id="login-error-box" class="login-error hidden" role="alert"></div>
+
+        <button type="submit" id="btn-submit-login" class="btn btn-primary full-width">
+          Entra nel sistema
+        </button>
+      </form>
+    </div>
+  </div>
+
   <main class="container">
-    <!-- FORM DI INSERIMENTO COMPLETO -->
-    <section class="card">
+    <!-- FORM DI INSERIMENTO COMPLETO (visibile SOLO dopo il Login) -->
+    <section id="card-nuova-segnalazione" class="card hidden">
       <div class="card-header">
         <h2>Nuova Segnalazione Completa</h2>
+        <span id="form-auth-hint" class="sub-text"></span>
       </div>
       <form id="form-segnalazione" class="form-grid">
         <div class="form-group full-width">
@@ -91,20 +144,11 @@
           </select>
         </div>
 
-        <div class="form-group">
-          <label for="id_utente">Operatore / Utente *</label>
-          <select id="id_utente" name="id_utente" required>
-            <option value="1">Mario Rossi (mrossi)</option>
-            <option value="2">Luca Bianchi (lbianchi)</option>
-            <option value="3">Giulia Verdi (gverdi)</option>
-          </select>
-        </div>
-
         <button type="submit" class="btn btn-primary full-width">Invia Segnalazione</button>
       </form>
     </section>
 
-    <!-- TABELLA VISUALIZZAZIONE DETTAGLIATA -->
+    <!-- TABELLA VISUALIZZAZIONE DETTAGLIATA (sempre visibile) -->
     <section class="card">
       <div class="card-header">
         <h2>Registro Segnalazioni</h2>
