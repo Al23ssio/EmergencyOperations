@@ -16,7 +16,7 @@
 | # | Caso | Chi | L'AI ha… | Cosa si è tenuto |
 | :---: | :---- | :---- | :---- | :---- |
 | 1 | Generazione degli endpoint delle note | Carmen | **aiutato in parte, ma ha sbagliato una colonna** | Validazione, controllo 404, JOIN su `nome_cognome`; **scartata** la colonna `data_creazione` |
-| 2 | Generazione dei test per la nuova feature | Ignat | **aiutato** | Test unitari della validazione delle note |
+| 2 | Generazione dei test per la nuova feature | Ignat | **aiutato** | 6 test tenuti, 3 scartati con motivazione |
 | 3 | Refactoring degli endpoint delle note | Alessio | **sbagliato** | Niente: mantenuto il codice originale |
 | 4 | Debug assistito: errore 500 su `PATCH /segnalazioni/:id/stato` | Sabrina | **aiutato** | Diagnosi della causa; correzione della query sullo storico |
 | 5 | Debug assistito: guasto nell'ambiente TEST su Kubernetes | Sabrina | **aiutato** | Metodo di diagnosi in 5 fasi; correzione di `PORT` nel ConfigMap |
@@ -56,24 +56,34 @@ La query attiva nel router, con `creata_il`, restituisce invece la nota con l'au
 
 ## Caso 2 — Generazione dei test per la nuova feature (Ignat)
 
-**Dove:** `tests/unit/test-note.test.js` (⚠️ da confermare con Ignat che sia il file generato in questa fase).
+**Dove:** `tests/segnalazioni.test.js`. Il report completo è in `docs/e2e-test-report.md`, sezione "Report di Test API – Segnalazioni (Passo 4)".
 
-**Chiesto:** una suite di test per la validazione delle note, con happy path, casi limite e casi di errore, senza rete né database.
+**Chiesto:** una suite di test per gli endpoint delle segnalazioni, con happy path, casi limite e casi di errore.
 
-**Test tenuti:**
+**Ottenuto:** una suite scritta con **Jest + Supertest**, con il database simulato (`jest.mock('../src/db')`), più alcune proposte di test aggiuntivi.
 
-| Test | Cosa verifica | Perché è stato tenuto |
+**Test tenuti (6):**
+
+| Test | Categoria | Perché è stato tenuto |
 | :---- | :---- | :---- |
-| Happy path: payload valido | `{ id_utente: 1, testo: "Intervento completato" }` → valido | Copre il caso normale d'uso |
-| Caso negativo 1: `id_utente` assente | → errore `id_utente obbligatorio` | `id_utente` è `NOT NULL` nella tabella `nota` |
-| Caso negativo 2: testo vuoto o solo spazi | `"   "` → errore `testo obbligatorio` | Una nota vuota non ha valore operativo |
-| Caso negativo 3: payload nullo | `null` → errore `Payload mancante` | Evita un crash su richieste senza body |
+| Creazione segnalazione valida (HTTP 201) | Happy path | Verifica l'inserimento con i dati obbligatori |
+| Recupero lista segnalazioni (HTTP 200) | Happy path | Conferma che la lettura restituisca un array |
+| Avanzamento stato valido (`ricevuta → valutata`) | Happy path | Verifica che la macchina a stati accetti le transizioni consentite |
+| Creazione senza campi obbligatori (HTTP 400) | Caso negativo | L'API deve restituire un errore strutturato se il body è incompleto |
+| Transizione di stato non consentita (HTTP 400) | Caso negativo | Impedisce salti di stato anomali (es. `ricevuta → risolta`) |
+| Ricerca segnalazione inesistente (HTTP 404) | Edge case | Evita errori 500 su risorse non presenti |
 
-**Test scartati e motivazione:**
+**Test scartati (3):**
 
-> ⚠️ **Da completare con Ignat:** elencare i test proposti dall'AI che sono stati scartati e il motivo (per esempio test duplicati, test che richiedevano il database dentro un unit test, test su comportamenti non richiesti dal cliente).
+| Test proposto dall'AI | Perché è stato scartato |
+| :---- | :---- |
+| SQL injection nei parametri | Ridondante a questo livello: tutte le query usano parametri posizionali (`$1, $2`) del driver `pg` |
+| Test di carico (es. 10.000 richieste/secondo) | Fuori scopo per un test di integrazione; richiederebbe strumenti esterni (k6, JMeter) |
+| Autenticazione / autorizzazione | Il login non è ancora implementato: `id_utente` arriva dal body (limite noto, segnato con `TODO`) |
 
-**Esito:** **l'AI ha aiutato.** I quattro test sono integrati ed eseguiti con `node --test tests/unit/`.
+**Esito:** **l'AI ha aiutato** a proporre una suite completa e a ragionare su cosa scartare.
+
+**Nota aperta:** l'AI ha scelto **Jest**, mentre il resto del progetto usa il test runner di Node (`node --test`, script `npm test` in `package.json`), e ha simulato il database, mentre negli integration test il team usa PostgreSQL reale. Le due impostazioni vanno allineate.
 
 ---
 
