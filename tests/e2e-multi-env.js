@@ -1,3 +1,5 @@
+const { login } = require('./login-helper');
+
 const PORT = process.env.PORT || 3000;
 const BASE_URL = process.env.BASE_URL || `http://localhost:${PORT}`;
 
@@ -15,10 +17,14 @@ async function runE2E() {
   }
   console.log(`[OK] 2. Backend -> Database connesso (env: ${healthData.environment}, CORS: ${healthData.corsOrigin})`);
 
+  // Le rotte delle segnalazioni sono protette: prima facciamo il login
+  const token = await login(BASE_URL, 'admin');
+  console.log('[OK] 2b. Login riuscito, token JWT ricevuto');
+
   // Inseriamo titolo, id_utente e id_area come richiesto dal validatore del backend
   const createRes = await fetch(`${BASE_URL}/segnalazioni`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
     body: JSON.stringify({
       titolo: 'Test E2E Multi-Ambiente',
       descrizione: 'Verifica flusso Frontend -> Backend -> Database',
@@ -37,7 +43,9 @@ async function runE2E() {
   const creata = await createRes.json();
   console.log(`[OK] 3. Creazione segnalazione su DB riuscita (ID: ${creata.id})`);
 
-  const listRes = await fetch(`${BASE_URL}/segnalazioni`);
+  const listRes = await fetch(`${BASE_URL}/segnalazioni`, {
+    headers: { Authorization: `Bearer ${token}` }
+  });
   const lista = await listRes.json();
   if (!listRes.ok || !Array.isArray(lista)) {
     throw new Error('Lettura lista segnalazioni fallita');
@@ -46,7 +54,7 @@ async function runE2E() {
 
   const patchRes = await fetch(`${BASE_URL}/segnalazioni/${creata.id}/stato`, {
     method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
     body: JSON.stringify({ stato: 'valutata' })
   });
   

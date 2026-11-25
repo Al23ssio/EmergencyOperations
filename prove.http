@@ -1,5 +1,30 @@
+### 0. LOGIN (eseguilo per primo: il token viene usato da tutte le altre richieste)
+# Utenti di prova (password Password123!): aneri = segnalatore, mrossi = operatore_centrale,
+# lbianchi / gverdi = squadra, pgialli = responsabile, admin = amministratore
+# @name login
+POST http://localhost:3000/api/auth/login
+Content-Type: application/json
+
+{ "username": "admin", "password": "Password123!" }
+
+@token = {{login.response.body.token}}
+
+### 0b. LOGIN SBAGLIATO -> 401 "Credenziali non valide"
+POST http://localhost:3000/api/auth/login
+Content-Type: application/json
+
+{ "username": "admin", "password": "sbagliata" }
+
+### 0c. SENZA TOKEN -> 401
+GET http://localhost:3000/segnalazioni
+
+### 0d. UTENTI (solo amministratore)
+GET http://localhost:3000/utenti
+Authorization: Bearer {{token}}
+
 ### 1. CREA una segnalazione
 POST http://localhost:3000/segnalazioni
+Authorization: Bearer {{token}}
 Content-Type: application/json
 
 {
@@ -15,63 +40,74 @@ Content-Type: application/json
 
 ### 2. LEGGI tutte le segnalazioni
 GET http://localhost:3000/segnalazioni
+Authorization: Bearer {{token}}
 
 ### 3. LEGGI la segnalazione numero 1
 GET http://localhost:3000/segnalazioni/1
+Authorization: Bearer {{token}}
 
 ### 4. OTTENGI gli stati consentiti
 GET http://localhost:3000/segnalazioni/stati
 
 ### 5. AGGIORNA lo stato a valutata (transizione valida)
 PATCH http://localhost:3000/segnalazioni/1/stato
+Authorization: Bearer {{token}}
 Content-Type: application/json
 
 { "stato": "valutata" }
 
 ### 6. AGGIORNA lo stato a assegnata (transizione valida)
 PATCH http://localhost:3000/segnalazioni/1/stato
+Authorization: Bearer {{token}}
 Content-Type: application/json
 
 { "stato": "assegnata" }
 
 ### 7. AGGIORNA lo stato a in_intervento (transizione valida)
 PATCH http://localhost:3000/segnalazioni/1/stato
+Authorization: Bearer {{token}}
 Content-Type: application/json
 
 { "stato": "in_intervento" }
 
 ### 8. AGGIORNA lo stato a risolta (transizione valida)
 PATCH http://localhost:3000/segnalazioni/1/stato
+Authorization: Bearer {{token}}
 Content-Type: application/json
 
 { "stato": "risolta" }
 
 ### 9. AGGIORNA lo stato a chiusa (transizione valida)
 PATCH http://localhost:3000/segnalazioni/1/stato
+Authorization: Bearer {{token}}
 Content-Type: application/json
 
 { "stato": "chiusa" }
 
 ### 10. TENTATIVO DI TRANSIZIONE NON VALIDA: ricevuta -> chiusa
 PATCH http://localhost:3000/segnalazioni/1/stato
+Authorization: Bearer {{token}}
 Content-Type: application/json
 
 { "stato": "chiusa" }
 
 ### 11. TENTATIVO DI TRANSIZIONE NON VALIDA: valutata -> risolta
 PATCH http://localhost:3000/segnalazioni/1/stato
+Authorization: Bearer {{token}}
 Content-Type: application/json
 
 { "stato": "risolta" }
 
 ### 12. TENTATIVO DI STATO NON VALIDO
 PATCH http://localhost:3000/segnalazioni/1/stato
+Authorization: Bearer {{token}}
 Content-Type: application/json
 
 { "stato": "pending" }
 
 ### 13. TENTATIVO DI STATO MANCANTE
 PATCH http://localhost:3000/segnalazioni/1/stato
+Authorization: Bearer {{token}}
 Content-Type: application/json
 
 {}
@@ -89,9 +125,11 @@ GET http://localhost:3000/health
 
 ### 3. [DEV] Lista segnalazioni (Backend -> Database)
 GET http://localhost:3000/segnalazioni
+Authorization: Bearer {{token}}
 
 ### 4. [DEV] Crea nuova segnalazione (Frontend -> Backend -> Database)
 POST http://localhost:3000/segnalazioni
+Authorization: Bearer {{token}}
 Content-Type: application/json
 
 {
@@ -105,6 +143,15 @@ Content-Type: application/json
 ### AMBIENTE TEST (config/test.env -> Porta 8080)
 ### ============================================================================
 
+### 0. [TEST] Login sull'ambiente di test
+# @name loginTest
+POST http://localhost:8080/api/auth/login
+Content-Type: application/json
+
+{ "username": "admin", "password": "Password123!" }
+
+@tokenTest = {{loginTest.response.body.token}}
+
 ### 1. [TEST] Verifica Frontend statico
 GET http://localhost:8080/
 
@@ -113,9 +160,11 @@ GET http://localhost:8080/health
 
 ### 3. [TEST] Lista segnalazioni (Backend -> Database)
 GET http://localhost:8080/segnalazioni
+Authorization: Bearer {{tokenTest}}
 
 ### 4. [TEST] Crea nuova segnalazione (Frontend -> Backend -> Database)
 POST http://localhost:8080/segnalazioni
+Authorization: Bearer {{tokenTest}}
 Content-Type: application/json
 
 {
