@@ -1,6 +1,9 @@
+# Ignora il file d'ambiente locale root
 .env
+.env.local
 node_modules
 
-# File di ambiente con secret reali
-.env
-config/dev.env
+# Escludi le estensioni .env generiche MA fai eccezione per la cartella config/
+*.env
+!config/dev.env
+!config/test.env
