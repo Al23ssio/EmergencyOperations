@@ -18,7 +18,8 @@ const AUTH_CONFIG = {
       id: u.id ?? u.id_utente,
       nome: u.nome || u.username || u.email || 'Utente',
       ruolo: normalizeRole(u.ruolo || u.role || 'guest'),
-      id_squadra: u.id_squadra ?? null
+      id_squadra: u.id_squadra ?? null,
+      id_area: u.id_area ?? null
     };
   },
   storageKey: 'eo_auth_session'
@@ -100,6 +101,15 @@ const ROLE_PERMISSIONS = {
     canManageUsers: true
   }
 };
+
+const ALL_WORKFLOW_STATES = [
+  'ricevuta',
+  'valutata',
+  'assegnata',
+  'in_intervento',
+  'risolta',
+  'chiusa'
+];
 
 /**
  * ============================================================================
@@ -429,12 +439,16 @@ async function caricaSegnalazioni() {
     let segnalazioni = await res.json();
     if (!Array.isArray(segnalazioni)) segnalazioni = [];
 
-    // Filtro visivo lato client (in attesa/supporto del filtro lato server)
+    // Filtro visivo lato client (in supporto al filtro lato server)
     if (currentUser) {
       if (perms.viewScope === 'own') {
         segnalazioni = segnalazioni.filter(s => Number(s.id_utente) === Number(currentUser.id));
-      } else if (perms.viewScope === 'team' && currentUser.id_squadra) {
-        segnalazioni = segnalazioni.filter(s => Number(s.id_squadra) === Number(currentUser.id_squadra));
+      } else if (perms.viewScope === 'team') {
+        if (currentUser.id_squadra) {
+          segnalazioni = segnalazioni.filter(s => Number(s.id_squadra) === Number(currentUser.id_squadra));
+        } else if (currentUser.id_area) {
+          segnalazioni = segnalazioni.filter(s => Number(s.id_area) === Number(currentUser.id_area));
+        }
       }
     }
 
@@ -442,8 +456,6 @@ async function caricaSegnalazioni() {
       container.innerHTML = '<p>Nessuna segnalazione visibile per il tuo profilo.</p>';
       return;
     }
-
-    const showActionsColumn = perms.allowedStatusTransitions.length > 0 || perms.canAddNotes;
 
     let html = `
       <table class="table-segnalazioni">
@@ -456,7 +468,7 @@ async function caricaSegnalazioni() {
             <th>Priorità</th>
             <th>Stato</th>
             <th>Data</th>
-            ${showActionsColumn ? '<th>Azioni Ruolo</th>' : ''}
+            <th>Azioni</th>
           </tr>
         </thead>
         <tbody>
@@ -466,23 +478,33 @@ async function caricaSegnalazioni() {
       const latLongText = (s.latitudine && s.longitudine) ? `${s.latitudine}, ${s.longitudine}` : '-';
       const dataCreazione = s.creata_il ? new Date(s.creata_il).toLocaleString('it-IT') : '-';
 
-      // Costruzione colonna Azioni in base ai permessi del ruolo
-      let actionsHtml = '';
-      if (showActionsColumn) {
-        const statusButtons = perms.allowedStatusTransitions
-          .filter(st => st !== s.stato)
-          .map(st => `
-            <button type="button" class="btn-action-status" data-id="${s.id}" data-stato="${st}">
-              → ${escapeHtml(st)}
-            </button>
-          `).join('');
+      // Tendina stato nell'ordine reale del workflow
+      let statusDropdownHtml = '';
+      if (perms.allowedStatusTransitions.length > 0) {
+        const currentStato = s.stato || 'ricevuta';
+        const currentIndex = ALL_WORKFLOW_STATES.indexOf(currentStato);
 
-        const noteButton = perms.canAddNotes
-          ? `<button type="button" class="btn-action-note" data-id="${s.id}">+ Nota</button>`
-          : '';
+        const optionsHtml = ALL_WORKFLOW_STATES.map((st, idx) => {
+          const isCurrent = st === currentStato;
+          const isAllowedNext = idx > currentIndex && perms.allowedStatusTransitions.includes(st);
+          const label = isCurrent ? `${st} (attuale)` : st;
 
-        actionsHtml = `<td><div class="action-buttons-group">${statusButtons}${noteButton}</div></td>`;
+          return `<option value="${escapeHtml(st)}" ${isCurrent ? 'selected' : ''} ${!isAllowedNext ? 'disabled' : ''}>${escapeHtml(label)}</option>`;
+        }).join('');
+
+        statusDropdownHtml = `
+          <select class="select-stato-azione" data-id="${s.id}" aria-label="Cambia stato segnalazione #${s.id}">
+            ${optionsHtml}
+          </select>
+        `;
       }
+
+      const viewNotesButton = `<button type="button" class="btn-action-note" data-action="view-notes" data-id="${s.id}">📋 Note</button>`;
+      const addNoteButton = perms.canAddNotes
+        ? `<button type="button" class="btn-action-note" data-action="add-note" data-id="${s.id}">+ Nota</button>`
+        : '';
+
+      const actionsHtml = `<td><div class="action-buttons-group">${statusDropdownHtml}${viewNotesButton}${addNoteButton}</div></td>`;
 
       html += `
         <tr>
@@ -510,11 +532,18 @@ async function caricaSegnalazioni() {
     html += '</tbody></table>';
     container.innerHTML = html;
 
-    // Collega gli eventi ai pulsanti di azione appena creati
-    container.querySelectorAll('.btn-action-status').forEach(btn => {
-      btn.addEventListener('click', () => aggiornaStatoSegnalazione(btn.dataset.id, btn.dataset.stato));
+    // Collega gli eventi alla tendina di cambio stato e ai pulsanti note
+    container.querySelectorAll('.select-stato-azione').forEach(select => {
+      select.addEventListener('change', () => {
+        if (select.value) {
+          aggiornaStatoSegnalazione(select.dataset.id, select.value);
+        }
+      });
     });
-    container.querySelectorAll('.btn-action-note').forEach(btn => {
+    container.querySelectorAll('[data-action="view-notes"]').forEach(btn => {
+      btn.addEventListener('click', () => visualizzaNoteSegnalazione(btn.dataset.id));
+    });
+    container.querySelectorAll('[data-action="add-note"]').forEach(btn => {
       btn.addEventListener('click', () => aggiungiNotaSegnalazione(btn.dataset.id));
     });
 
@@ -580,9 +609,48 @@ async function aggiornaStatoSegnalazione(id, nuovoStato) {
     } else if (res.status !== 401 && res.status !== 403) {
       const errData = await res.json().catch(() => ({}));
       alert(`Errore ${res.status}: ${errData.errore || errData.message || 'Transizione di stato non consentita'}`);
+      caricaSegnalazioni();
     }
   } catch {
     alert('Impossibile contattare il server.');
+  }
+}
+
+async function visualizzaNoteSegnalazione(id) {
+  try {
+    const res = await apiFetch(`/segnalazioni/${id}`);
+    if (!res.ok) {
+      alert(`Errore ${res.status} nel recupero delle note.`);
+      return;
+    }
+
+    const dettaglio = await res.json();
+    let note = Array.isArray(dettaglio)
+      ? dettaglio
+      : (dettaglio.note || dettaglio.note_intervento || dettaglio.notes || []);
+
+    if (note.length === 0) {
+      const resNote = await apiFetch(`/segnalazioni/${id}/note`);
+      if (resNote.ok) {
+        const dataNote = await resNote.json();
+        note = Array.isArray(dataNote) ? dataNote : (dataNote.note || dataNote.note_intervento || []);
+      }
+    }
+
+    if (note.length === 0) {
+      alert(`Nessuna nota presente per la segnalazione #${id}.`);
+      return;
+    }
+
+    const elenco = note.map(n => {
+      const data = n.creata_il ? new Date(n.creata_il).toLocaleString('it-IT') : '';
+      const autore = n.autore || n.username || `Utente #${n.id_utente || '-'}`;
+      return `[${data}] ${autore}:\n${n.testo || n.nota || ''}`;
+    }).join('\n\n----------------\n\n');
+
+    alert(`Note per la segnalazione #${id}:\n\n${elenco}`);
+  } catch {
+    alert('Impossibile recuperare le note dal server.');
   }
 }
 
