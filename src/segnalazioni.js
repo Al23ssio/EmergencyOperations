@@ -1,8 +1,38 @@
 // Operazioni sulle segnalazioni: crea, leggi, aggiorna, note, assegnazioni e storico
 const express = require('express');
 const pool = require('./db'); // o '../db' a seconda della struttura cartelle
+const { autentica, autorizza, RUOLI } = require('./middleware/auth');
 
 const router = express.Router();
+const { SEGNALATORE, OPERATORE, SQUADRA, RESPONSABILE, ADMIN } = RUOLI;
+
+// Stati che ogni ruolo puo impostare con PATCH /:id/stato (matrice dei permessi)
+const STATI_PER_RUOLO = {
+  [OPERATORE]: ['valutata', 'assegnata', 'chiusa'],
+  [SQUADRA]: ['in_intervento', 'risolta'],
+  [ADMIN]: ['ricevuta', 'valutata', 'assegnata', 'in_intervento', 'risolta', 'chiusa']
+};
+
+// Condizione SQL per vedere solo le segnalazioni permesse al ruolo:
+// - segnalatore: solo quelle che ha creato lui
+// - squadra: solo quelle assegnate a una delle sue squadre
+// - operatore, responsabile, amministratore: tutte
+function filtroVisibilita(utente, primoParametro) {
+  const p = `$${primoParametro}`;
+  if (utente.ruolo === SEGNALATORE) {
+    return { sql: `s.id_utente = ${p}`, valori: [utente.id] };
+  }
+  if (utente.ruolo === SQUADRA) {
+    return {
+      sql: `s.id IN (SELECT a.id_segnalazione
+                       FROM assegnazione a
+                       JOIN squadra_utente su ON su.id_squadra = a.id_squadra
+                      WHERE su.id_utente = ${p})`,
+      valori: [utente.id]
+    };
+  }
+  return { sql: 'TRUE', valori: [] };
+}
 
 const STATI_VALIDI = ['ricevuta', 'valutata', 'assegnata', 'in_intervento', 'risolta', 'chiusa'];
 const MACCHINA_STATI = {
@@ -21,6 +51,9 @@ router.get('/stati', (req, res) => {
     descrizione: 'Sequenza consentita: ricevuta -> valutata -> assegnata -> in_intervento -> risolta -> chiusa'
   });
 });
+
+// Tutte le rotte qui sotto richiedono il login (token JWT valido)
+router.use(autentica);
 
 // Gestione degli errori del database
 function gestisciErrore(err, res) {
@@ -43,12 +76,14 @@ function validaTransizione(statoCorrente, nuovoStato) {
 }
 
 // CREATE - crea una nuova segnalazione
-router.post('/', async (req, res) => {
+router.post('/', autorizza(SEGNALATORE, OPERATORE, ADMIN), async (req, res) => {
   const { titolo, descrizione, indirizzo, latitudine, longitudine,
-          priorita, canale, id_utente, id_area, id_categoria } = req.body;
+          priorita, canale, id_area, id_categoria } = req.body;
+  // L'autore e sempre l'utente del token, non quello scritto nel body
+  const id_utente = req.utente.id;
 
-  if (!titolo || !id_utente || !id_area) {
-    return res.status(400).json({ errore: 'titolo, id_utente e id_area sono obbligatori' });
+  if (!titolo || !id_area) {
+    return res.status(400).json({ errore: 'titolo e id_area sono obbligatori' });
   }
 
   try {
@@ -70,7 +105,11 @@ router.post('/', async (req, res) => {
 // READ - tutte le segnalazioni
 router.get('/', async (req, res) => {
   try {
-    const risultato = await pool.query('SELECT * FROM segnalazione ORDER BY id');
+    const filtro = filtroVisibilita(req.utente, 1);
+    const risultato = await pool.query(
+      `SELECT s.* FROM segnalazione s WHERE ${filtro.sql} ORDER BY s.id`,
+      filtro.valori
+    );
     res.json(risultato.rows);
   } catch (err) {
     gestisciErrore(err, res);
@@ -84,6 +123,14 @@ router.get('/:id', async (req, res) => {
     if (risultato.rows.length === 0) {
       return res.status(404).json({ errore: 'Segnalazione non trovata' });
     }
+    const filtro = filtroVisibilita(req.utente, 2);
+    const visibile = await pool.query(
+      `SELECT 1 FROM segnalazione s WHERE s.id = $1 AND ${filtro.sql}`,
+      [req.params.id, ...filtro.valori]
+    );
+    if (visibile.rows.length === 0) {
+      return res.status(403).json({ errore: 'Non hai i permessi per vedere questa segnalazione' });
+    }
     res.json(risultato.rows[0]);
   } catch (err) {
     gestisciErrore(err, res);
@@ -91,8 +138,8 @@ router.get('/:id', async (req, res) => {
 });
 
 // UPDATE - cambia lo stato secondo la macchina a stati consentita E salva lo storico
-router.patch('/:id/stato', async (req, res) => {
-  const { stato, id_utente, note } = req.body;
+router.patch('/:id/stato', autorizza(OPERATORE, SQUADRA, ADMIN), async (req, res) => {
+  const { stato } = req.body;
 
   if (!stato || typeof stato !== 'string') {
     return res.status(400).json({ errore: 'stato obbligatorio' });
@@ -102,6 +149,13 @@ router.patch('/:id/stato', async (req, res) => {
 
   if (!STATI_VALIDI.includes(nuovoStato)) {
     return res.status(400).json({ errore: `stato non valido: ${nuovoStato}` });
+  }
+
+  // Ogni ruolo puo portare la segnalazione solo in certi stati
+  if (!STATI_PER_RUOLO[req.utente.ruolo].includes(nuovoStato)) {
+    return res.status(403).json({
+      errore: `Il ruolo "${req.utente.ruolo}" non puo impostare lo stato "${nuovoStato}"`
+    });
   }
 
   const client = await pool.connect();
@@ -119,7 +173,22 @@ router.patch('/:id/stato', async (req, res) => {
     }
 
     const statoCorrente = segnalazione.rows[0].stato;
-    const idUtenteStorico = id_utente || segnalazione.rows[0].id_utente;
+    // Nello storico finisce l'utente che ha fatto la modifica (dal token)
+    const idUtenteStorico = req.utente.id;
+
+    // La squadra puo aggiornare solo le segnalazioni assegnate a lei
+    if (req.utente.ruolo === SQUADRA) {
+      const assegnata = await client.query(
+        `SELECT 1 FROM assegnazione a
+           JOIN squadra_utente su ON su.id_squadra = a.id_squadra
+          WHERE a.id_segnalazione = $1 AND su.id_utente = $2`,
+        [req.params.id, req.utente.id]
+      );
+      if (assegnata.rows.length === 0) {
+        await client.query('ROLLBACK');
+        return res.status(403).json({ errore: 'Questa segnalazione non e assegnata alla tua squadra' });
+      }
+    }
 
     try {
       validaTransizione(statoCorrente, nuovoStato);
@@ -159,13 +228,10 @@ const risultato = await client.query(
 });
 
 // NOTE - Aggiungi nota a una segnalazione
-router.post('/:id/note', async (req, res) => {
-  const { id_utente, testo } = req.body;
+router.post('/:id/note', autorizza(SEGNALATORE, OPERATORE, SQUADRA, RESPONSABILE, ADMIN), async (req, res) => {
+  const { testo } = req.body;
+  const id_utente = req.utente.id; // autore della nota = utente del token
   const id_segnalazione = req.params.id;
-
-  if (!id_utente) {
-    return res.status(400).json({ errore: 'id_utente è obbligatorio' });
-  }
 
   if (!testo) {
     return res.status(400).json({ errore: 'Il testo della nota è obbligatorio' });
@@ -209,8 +275,8 @@ router.get('/:id/note', async (req, res) => {
 });
 
 // ASSEGNAZIONE - Assegna segnalazione a utente o squadra
-router.post('/:id/assegna', async (req, res) => {
-  const { id_squadra, id_utente_assegnatore } = req.body;
+router.post('/:id/assegna', autorizza(OPERATORE, ADMIN), async (req, res) => {
+  const { id_squadra } = req.body;
   const id_segnalazione = req.params.id;
 
   if (!id_squadra) {
@@ -223,7 +289,8 @@ router.post('/:id/assegna', async (req, res) => {
       return res.status(404).json({ errore: 'Segnalazione non trovata' });
     }
 
-    const idUtenteAssegnazione = id_utente_assegnatore || chk.rows[0].id_utente;
+    // Chi assegna e l'utente del token (operatore di centrale o amministratore)
+    const idUtenteAssegnazione = req.utente.id;
 
     const risultato = await pool.query(
       `INSERT INTO assegnazione (id_segnalazione, id_squadra, id_utente)

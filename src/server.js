@@ -2,7 +2,7 @@ const express = require('express');
 const pool = require('./db');
 const authRoutes = require('./auth');
 
-const REQUIRED_ENV = ['DB_HOST', 'POSTGRES_DB', 'POSTGRES_USER', 'POSTGRES_PASSWORD'];
+const REQUIRED_ENV = ['DB_HOST', 'POSTGRES_DB', 'POSTGRES_USER', 'POSTGRES_PASSWORD', 'JWT_SECRET'];
 
 const missingEnv = REQUIRED_ENV.filter((key) => !process.env[key]);
 
@@ -28,6 +28,7 @@ app.use((req, res, next) => {
 
 app.use('/segnalazioni', require('./segnalazioni'));
 app.use('/api/auth', authRoutes);
+app.use('/utenti', require('./utenti'));
 app.use(express.static('public'));
 
 app.get('/health', async (req, res) => {

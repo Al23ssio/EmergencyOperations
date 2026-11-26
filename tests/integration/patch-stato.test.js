@@ -1,5 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert');
+const { login } = require('../login-helper');
 
 // Configurazione URL base, supporta l'ambiente locale e la CI
 const BASE_URL = process.env.TEST_URL || 'http://localhost:3000';
@@ -7,12 +8,14 @@ const BASE_URL = process.env.TEST_URL || 'http://localhost:3000';
 test('Integration Test: PATCH /segnalazioni/:id/stato (Database Reale)', async (t) => {
   
   let idSegnalazioneTest;
+  // Le rotte sono protette: serve il token di un utente con i permessi giusti
+  const token = await login(BASE_URL, 'admin');
 
   // Setup: Creazione di una segnalazione iniziale sul DB (Stato di default: 'ricevuta')
   await t.test('Setup: Creazione segnalazione di test', async () => {
     const resCreate = await fetch(`${BASE_URL}/segnalazioni`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify({
         titolo: 'Test Integrazione Macchina Stati',
         descrizione: 'Segnalazione creata per testare la transizione di stato sul DB reale',
@@ -33,7 +36,7 @@ test('Integration Test: PATCH /segnalazioni/:id/stato (Database Reale)', async (
   await t.test('Errore: Transizione non ammessa (ricevuta -> chiusa)', async () => {
     const resInvalid = await fetch(`${BASE_URL}/segnalazioni/${idSegnalazioneTest}/stato`, {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify({ stato: 'chiusa' })
     });
     
@@ -46,7 +49,7 @@ test('Integration Test: PATCH /segnalazioni/:id/stato (Database Reale)', async (
   await t.test('Successo: Transizione ammessa (ricevuta -> valutata)', async () => {
     const resValid = await fetch(`${BASE_URL}/segnalazioni/${idSegnalazioneTest}/stato`, {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify({ stato: 'valutata', id_utente: 1 })
     });
     
@@ -59,7 +62,7 @@ test('Integration Test: PATCH /segnalazioni/:id/stato (Database Reale)', async (
   await t.test('Errore: Segnalazione inesistente (404)', async () => {
     const resNotFound = await fetch(`${BASE_URL}/segnalazioni/999999/stato`, {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify({ stato: 'valutata' })
     });
     
@@ -70,7 +73,7 @@ test('Integration Test: PATCH /segnalazioni/:id/stato (Database Reale)', async (
   await t.test('Errore: Stato obbligatorio mancante', async () => {
     const resBadRequest = await fetch(`${BASE_URL}/segnalazioni/${idSegnalazioneTest}/stato`, {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify({}) // Body vuoto
     });
     

@@ -181,6 +181,7 @@ const AuthManager = (() => {
       }
     }
     clearSession();
+    caricaSegnalazioni();
   }
 
   function bindEvents() {
@@ -305,6 +306,12 @@ async function checkHealth() {
 // Carica la lista delle segnalazioni
 async function caricaSegnalazioni() {
   const container = document.getElementById('lista-container');
+
+  // Le segnalazioni sono visibili solo dopo il login (il backend risponde 401)
+  if (!AuthManager.isAuthenticated()) {
+    container.innerHTML = '<p>Effettua il login per vedere le segnalazioni.</p>';
+    return;
+  }
 
   try {
     const res = await apiFetch('/segnalazioni');
