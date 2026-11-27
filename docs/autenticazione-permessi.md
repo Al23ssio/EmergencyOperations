@@ -25,13 +25,22 @@ L'autore di una segnalazione, nota, assegnazione o modifica viene preso **dal to
 | Endpoint | Segnalatore | Operatore di centrale | Squadra | Responsabile | Amministratore |
 |---|:-:|:-:|:-:|:-:|:-:|
 | `POST /segnalazioni` (crea) | ✓ | ✓ | – | – | ✓ |
-| `GET /segnalazioni` (consulta) | ✓ solo le proprie | ✓ | ✓ solo le assegnate | ✓ | ✓ |
-| `PATCH /segnalazioni/:id/stato` | – | ✓ valutata, assegnata, chiusa | ✓ in_intervento, risolta (solo se assegnata) | – | ✓ |
-| `POST /segnalazioni/:id/assegna` | – | ✓ | – | – | ✓ |
+| `GET /segnalazioni` (consulta) | ✓ solo le proprie | ✓ | ✓ solo quelle assegnate a lui o alla sua squadra | ✓ | ✓ |
+| `PATCH /segnalazioni/:id/stato` | – | ✓ valutata, chiusa | ✓ in_intervento, risolta (solo se assegnata a lui o alla sua squadra) | – | ✓ |
+| `POST /segnalazioni/:id/assegna` (stato → assegnata) | – | ✓ | – | – | ✓ |
+| `GET /squadre` (squadre e componenti) | – | ✓ | – | ✓ | ✓ |
 | `POST /segnalazioni/:id/note` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `GET /utenti`, `POST /utenti` | – | – | – | – | ✓ |
 
 Le regole della macchina a stati restano valide per tutti, compreso l'amministratore. Per esempio `ricevuta → chiusa` dà sempre 400.
+
+### Assegnazione dei compiti
+
+Una segnalazione `valutata` si affida **a una squadra intera** (`{ "id_squadra": 1 }`) **oppure a una singola persona** con ruolo squadra (`{ "id_utente_assegnato": 2 }`) con `POST /segnalazioni/:id/assegna`. Lo stato diventa da solo `assegnata`: per questo "assegnata" non si imposta con il PATCH.
+
+- Chi ce l'ha in carico ora è salvato in `segnalazione.id_squadra_assegnata` / `id_utente_assegnato`; la tabella `assegnazione` tiene lo storico (con `terminata_il` quando si riassegna).
+- La squadra vede e aggiorna **solo** i compiti assegnati a lei o a lui personalmente: li porta a `in_intervento` e poi a `risolta`. La **chiusura** resta all'operatore di centrale, dopo la verifica.
+- Nel frontend l'operatore usa il menu **"Assegna a…"** nella colonna Azioni; la colonna **"Assegnata a"** mostra 👥 squadra o 👤 persona.
 
 I nomi dei ruoli nel database sono `segnalatore`, `operatore_centrale`, `squadra`, `responsabile` e `amministratore` (tabella `ruolo`).
 

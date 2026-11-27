@@ -6,16 +6,18 @@ const { autentica, autorizza, RUOLI } = require('./middleware/auth');
 const router = express.Router();
 const { SEGNALATORE, OPERATORE, SQUADRA, RESPONSABILE, ADMIN } = RUOLI;
 
-// Stati che ogni ruolo puo impostare con PATCH /:id/stato (matrice dei permessi)
+// Stati che ogni ruolo puo impostare con PATCH /:id/stato (matrice dei permessi).
+// "assegnata" non c'e perche si ottiene con POST /:id/assegna.
 const STATI_PER_RUOLO = {
-  [OPERATORE]: ['valutata', 'assegnata', 'chiusa'],
+  [OPERATORE]: ['valutata', 'chiusa'],
   [SQUADRA]: ['in_intervento', 'risolta'],
-  [ADMIN]: ['ricevuta', 'valutata', 'assegnata', 'in_intervento', 'risolta', 'chiusa']
+  [ADMIN]: ['ricevuta', 'valutata', 'in_intervento', 'risolta', 'chiusa']
 };
 
 // Condizione SQL per vedere solo le segnalazioni permesse al ruolo:
 // - segnalatore: solo quelle che ha creato lui
-// - squadra: solo quelle assegnate a una delle sue squadre
+// - squadra: solo quelle assegnate ORA a lui personalmente
+//            oppure a una delle squadre di cui fa parte
 // - operatore, responsabile, amministratore: tutte
 function filtroVisibilita(utente, primoParametro) {
   const p = `$${primoParametro}`;
@@ -24,15 +26,24 @@ function filtroVisibilita(utente, primoParametro) {
   }
   if (utente.ruolo === SQUADRA) {
     return {
-      sql: `s.id IN (SELECT a.id_segnalazione
-                       FROM assegnazione a
-                       JOIN squadra_utente su ON su.id_squadra = a.id_squadra
-                      WHERE su.id_utente = ${p})`,
+      sql: `(s.id_utente_assegnato = ${p}
+             OR s.id_squadra_assegnata IN (SELECT su.id_squadra
+                                             FROM squadra_utente su
+                                            WHERE su.id_utente = ${p}))`,
       valori: [utente.id]
     };
   }
   return { sql: 'TRUE', valori: [] };
 }
+
+// SELECT comune: la segnalazione + il nome di chi ce l'ha in carico
+const SELECT_SEGNALAZIONE = `
+  SELECT s.*,
+         sq.nome         AS squadra_assegnata,
+         ua.nome_cognome AS utente_assegnato
+    FROM segnalazione s
+    LEFT JOIN squadra sq ON sq.id = s.id_squadra_assegnata
+    LEFT JOIN utente  ua ON ua.id = s.id_utente_assegnato`;
 
 const STATI_VALIDI = ['ricevuta', 'valutata', 'assegnata', 'in_intervento', 'risolta', 'chiusa'];
 const MACCHINA_STATI = {
@@ -107,7 +118,7 @@ router.get('/', async (req, res) => {
   try {
     const filtro = filtroVisibilita(req.utente, 1);
     const risultato = await pool.query(
-      `SELECT s.* FROM segnalazione s WHERE ${filtro.sql} ORDER BY s.id`,
+      `${SELECT_SEGNALAZIONE} WHERE ${filtro.sql} ORDER BY s.id`,
       filtro.valori
     );
     res.json(risultato.rows);
@@ -119,7 +130,7 @@ router.get('/', async (req, res) => {
 // READ - una segnalazione
 router.get('/:id', async (req, res) => {
   try {
-    const risultato = await pool.query('SELECT * FROM segnalazione WHERE id = $1', [req.params.id]);
+    const risultato = await pool.query(`${SELECT_SEGNALAZIONE} WHERE s.id = $1`, [req.params.id]);
     if (risultato.rows.length === 0) {
       return res.status(404).json({ errore: 'Segnalazione non trovata' });
     }
@@ -151,6 +162,14 @@ router.patch('/:id/stato', autorizza(OPERATORE, SQUADRA, ADMIN), async (req, res
     return res.status(400).json({ errore: `stato non valido: ${nuovoStato}` });
   }
 
+  // "assegnata" non si imposta a mano: lo fa POST /:id/assegna,
+  // che sceglie anche A CHI assegnarla
+  if (nuovoStato === 'assegnata') {
+    return res.status(400).json({
+      errore: 'Per assegnare usa POST /segnalazioni/:id/assegna indicando la squadra o la persona'
+    });
+  }
+
   // Ogni ruolo puo portare la segnalazione solo in certi stati
   if (!STATI_PER_RUOLO[req.utente.ruolo].includes(nuovoStato)) {
     return res.status(403).json({
@@ -177,16 +196,16 @@ router.patch('/:id/stato', autorizza(OPERATORE, SQUADRA, ADMIN), async (req, res
     const idUtenteStorico = req.utente.id;
 
     // La squadra puo aggiornare solo le segnalazioni assegnate a lei
+    // (a lui personalmente o a una squadra di cui fa parte)
     if (req.utente.ruolo === SQUADRA) {
+      const filtro = filtroVisibilita(req.utente, 2);
       const assegnata = await client.query(
-        `SELECT 1 FROM assegnazione a
-           JOIN squadra_utente su ON su.id_squadra = a.id_squadra
-          WHERE a.id_segnalazione = $1 AND su.id_utente = $2`,
-        [req.params.id, req.utente.id]
+        `SELECT 1 FROM segnalazione s WHERE s.id = $1 AND ${filtro.sql}`,
+        [req.params.id, ...filtro.valori]
       );
       if (assegnata.rows.length === 0) {
         await client.query('ROLLBACK');
-        return res.status(403).json({ errore: 'Questa segnalazione non e assegnata alla tua squadra' });
+        return res.status(403).json({ errore: 'Questa segnalazione non e assegnata a te o alla tua squadra' });
       }
     }
 
@@ -274,34 +293,110 @@ router.get('/:id/note', async (req, res) => {
   }
 });
 
-// ASSEGNAZIONE - Assegna segnalazione a utente o squadra
+// ASSEGNAZIONE - Affida la segnalazione a una squadra OPPURE a una persona
+// Body: { "id_squadra": 1 }  oppure  { "id_utente_assegnato": 2 }
+// - si puo assegnare quando la segnalazione e "valutata" (diventa "assegnata")
+//   oppure riassegnare quando e gia "assegnata"
+// - la persona deve essere un utente attivo con ruolo "squadra"
 router.post('/:id/assegna', autorizza(OPERATORE, ADMIN), async (req, res) => {
-  const { id_squadra } = req.body;
-  const id_segnalazione = req.params.id;
+  const idSquadra = req.body.id_squadra ?? null;
+  const idPersona = req.body.id_utente_assegnato ?? null;
+  const idSegnalazione = req.params.id;
 
-  if (!id_squadra) {
-    return res.status(400).json({ errore: 'Specificare id_squadra' });
+  if ((idSquadra === null) === (idPersona === null)) {
+    return res.status(400).json({ errore: 'Indica una squadra (id_squadra) oppure una persona (id_utente_assegnato), non entrambe' });
   }
 
+  const client = await pool.connect();
   try {
-    const chk = await pool.query('SELECT id, id_utente FROM segnalazione WHERE id = $1', [id_segnalazione]);
-    if (chk.rows.length === 0) {
+    await client.query('BEGIN');
+
+    const segn = await client.query(
+      'SELECT id, stato, id_squadra_assegnata, id_utente_assegnato FROM segnalazione WHERE id = $1 FOR UPDATE',
+      [idSegnalazione]
+    );
+    if (segn.rows.length === 0) {
+      await client.query('ROLLBACK');
       return res.status(404).json({ errore: 'Segnalazione non trovata' });
     }
+    const attuale = segn.rows[0];
 
-    // Chi assegna e l'utente del token (operatore di centrale o amministratore)
-    const idUtenteAssegnazione = req.utente.id;
+    if (!['valutata', 'assegnata'].includes(attuale.stato)) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({
+        errore: `Non si puo assegnare una segnalazione in stato "${attuale.stato}": deve essere "valutata" (o gia "assegnata" per riassegnarla)`
+      });
+    }
 
-    const risultato = await pool.query(
-      `INSERT INTO assegnazione (id_segnalazione, id_squadra, id_utente)
-       VALUES ($1, $2, $3)
-       RETURNING *`,
-      [id_segnalazione, id_squadra, idUtenteAssegnazione]
+    // Controllo che la squadra o la persona esistano e siano attive
+    let nomeAssegnatario;
+    if (idSquadra !== null) {
+      const sq = await client.query('SELECT nome FROM squadra WHERE id = $1 AND attiva', [idSquadra]);
+      if (sq.rows.length === 0) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ errore: 'Squadra inesistente o non attiva' });
+      }
+      nomeAssegnatario = `squadra: ${sq.rows[0].nome}`;
+    } else {
+      const ut = await client.query(
+        `SELECT u.nome_cognome, u.username FROM utente u JOIN ruolo r ON r.id = u.id_ruolo
+          WHERE u.id = $1 AND u.attivo AND r.nome = $2`,
+        [idPersona, SQUADRA]
+      );
+      if (ut.rows.length === 0) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ errore: 'La persona deve essere un utente attivo con ruolo "squadra"' });
+      }
+      nomeAssegnatario = `persona: ${ut.rows[0].nome_cognome || ut.rows[0].username}`;
+    }
+
+    // Chiude l'eventuale assegnazione precedente nello storico
+    await client.query(
+      'UPDATE assegnazione SET terminata_il = now() WHERE id_segnalazione = $1 AND terminata_il IS NULL',
+      [idSegnalazione]
+    );
+    await client.query(
+      `INSERT INTO assegnazione (id_segnalazione, id_squadra, id_utente_assegnato, id_utente)
+       VALUES ($1, $2, $3, $4)`,
+      [idSegnalazione, idSquadra, idPersona, req.utente.id]
     );
 
-    res.status(201).json(risultato.rows[0]);
+    // Aggiorna chi ha in carico la segnalazione (e lo stato, se era "valutata")
+    await client.query(
+      `UPDATE segnalazione
+          SET id_squadra_assegnata = $1,
+              id_utente_assegnato  = $2,
+              stato = 'assegnata'
+        WHERE id = $3`,
+      [idSquadra, idPersona, idSegnalazione]
+    );
+
+    await client.query(
+      `INSERT INTO storico_modifica (tipo_evento, campo, valore_precedente, valore_nuovo, id_segnalazione, id_utente)
+       VALUES ('assegnazione', 'assegnata_a', $1, $2, $3, $4)`,
+      [
+        attuale.id_squadra_assegnata ? `squadra #${attuale.id_squadra_assegnata}`
+          : attuale.id_utente_assegnato ? `persona #${attuale.id_utente_assegnato}` : null,
+        nomeAssegnatario, idSegnalazione, req.utente.id
+      ]
+    );
+    if (attuale.stato === 'valutata') {
+      await client.query(
+        `INSERT INTO storico_modifica (tipo_evento, campo, valore_precedente, valore_nuovo, id_segnalazione, id_utente)
+         VALUES ('cambio_stato', 'stato', 'valutata', 'assegnata', $1, $2)`,
+        [idSegnalazione, req.utente.id]
+      );
+    }
+
+    await client.query('COMMIT');
+
+    const aggiornata = await pool.query(`${SELECT_SEGNALAZIONE} WHERE s.id = $1`, [idSegnalazione]);
+    res.status(201).json(aggiornata.rows[0]);
   } catch (err) {
+    await client.query('ROLLBACK');
     gestisciErrore(err, res);
+  } finally {
+    client.release();
   }
 });
 

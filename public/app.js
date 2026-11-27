@@ -1,29 +1,127 @@
 /**
- * CONFIGURAZIONE UNICA AUTENTICAZIONE (AUTH_CONFIG)
- * Quando il collega del backend passa il contratto definitivo, aggiorna SOLO qui.
+ * ============================================================================
+ * CONFIGURAZIONE AUTENTICAZIONE (AUTH_CONFIG)
+ * ============================================================================
  */
 const AUTH_CONFIG = {
-  loginEndpoint: '/api/auth/login',       
-  logoutEndpoint: null,     
-  strategy: 'bearer',                
+  loginEndpoint: '/api/auth/login',
+  logoutEndpoint: null,
+  strategy: 'bearer',
   payloadKeys: {
-    identifier: 'username',          
+    identifier: 'username',
     password: 'password'
   },
-  extractToken: (data) => data.token || null,
+  extractToken: (data) => data.token || data.accessToken || null,
   extractUser: (data) => {
-    const u = data.user || {};
+    const u = data.user || data.utente || data;
     return {
-      id: u.id,
-      nome: u.username || 'Utente',
-      ruolo: (u.role || 'user').toLowerCase()
+      id: u.id ?? u.id_utente,
+      nome: u.nome || u.username || u.email || 'Utente',
+      ruolo: normalizeRole(u.ruolo || u.role || 'guest'),
+      id_squadra: u.id_squadra ?? null,
+      id_area: u.id_area ?? null
     };
   },
   storageKey: 'eo_auth_session'
 };
 
 /**
+ * Normalizza i nomi dei ruoli (supporta sia quelli del DB sia quelli del mock)
+ */
+function normalizeRole(rawRole) {
+  const r = String(rawRole || '').trim().toLowerCase();
+  if (r === 'admin' || r === 'amministratore') return 'amministratore';
+  if (r === 'operatore' || r === 'operatore di centrale' || r === 'operatore_centrale' || r === 'user') {
+    return 'operatore_centrale';
+  }
+  if (r === 'segnalatore') return 'segnalatore';
+  if (r === 'squadra') return 'squadra';
+  if (r === 'responsabile') return 'responsabile';
+  return 'guest';
+}
+
+/**
+ * ============================================================================
+ * MATRICE DEI PERMESSI PER RUOLO (RBAC UI)
+ * ============================================================================
+ */
+const ROLE_PERMISSIONS = {
+  guest: {
+    label: 'Ospite',
+    scopeDescription: 'Vista pubblica in sola lettura — accedi per operare',
+    viewScope: 'all',
+    canCreateReport: false,
+    allowedStatusTransitions: [],
+    canAssign: false,
+    canAddNotes: false,
+    canManageUsers: false
+  },
+  segnalatore: {
+    label: 'Segnalatore',
+    scopeDescription: 'Vista Segnalatore: visualizzi solo le segnalazioni inviate da te e puoi aggiungere note',
+    viewScope: 'own',
+    canCreateReport: true,
+    allowedStatusTransitions: [],
+    canAssign: false,
+    canAddNotes: true,
+    canManageUsers: false
+  },
+  operatore_centrale: {
+    label: 'Operatore di centrale',
+    scopeDescription: 'Vista Centrale Operativa: vedi tutte le segnalazioni, puoi crearne e gestirne valutazione/assegnazione/chiusura',
+    viewScope: 'all',
+    canCreateReport: true,
+    // "assegnata" si ottiene scegliendo a chi assegnare (menu "Assegna a...")
+    allowedStatusTransitions: ['valutata', 'chiusa'],
+    canAssign: true,
+    canAddNotes: true,
+    canManageUsers: false
+  },
+  squadra: {
+    label: 'Squadra',
+    scopeDescription: 'Vista Squadra: vedi solo i compiti assegnati a te o alla tua squadra e ne aggiorni lo stato (in intervento, risolta)',
+    viewScope: 'team',
+    canCreateReport: false,
+    allowedStatusTransitions: ['in_intervento', 'risolta'],
+    canAssign: false,
+    canAddNotes: true,
+    canManageUsers: false
+  },
+  responsabile: {
+    label: 'Responsabile',
+    scopeDescription: 'Vista Responsabile (supervisione): vedi tutte le segnalazioni e puoi aggiungere note',
+    viewScope: 'all',
+    canCreateReport: false,
+    allowedStatusTransitions: [],
+    canAssign: false,
+    canAddNotes: true,
+    canManageUsers: false
+  },
+  amministratore: {
+    label: 'Amministratore',
+    scopeDescription: 'Vista Amministratore: accesso completo a segnalazioni, stati, note e gestione utenti',
+    viewScope: 'all',
+    canCreateReport: true,
+    allowedStatusTransitions: ['valutata', 'in_intervento', 'risolta', 'chiusa'],
+    canAssign: true,
+    canAddNotes: true,
+    canManageUsers: true
+  }
+};
+
+const ALL_WORKFLOW_STATES = [
+  'ricevuta',
+  'valutata',
+  'assegnata',
+  'in_intervento',
+  'risolta',
+  'chiusa'
+];
+
+/**
+ * ============================================================================
  * GESTIONE SESSIONE E INTERFACCIA UTENTE (AuthManager)
+ * ============================================================================
  */
 const AuthManager = (() => {
   let state = { token: null, user: null };
@@ -33,7 +131,10 @@ const AuthManager = (() => {
       const saved = localStorage.getItem(AUTH_CONFIG.storageKey);
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (parsed && parsed.user) state = parsed;
+        if (parsed && parsed.user) {
+          parsed.user.ruolo = normalizeRole(parsed.user.ruolo);
+          state = parsed;
+        }
       }
     } catch {
       clearSession();
@@ -64,6 +165,14 @@ const AuthManager = (() => {
   function getUserId() { return state.user ? state.user.id : null; }
   function getToken() { return state.token; }
 
+  function getRoleKey() {
+    return isAuthenticated() ? normalizeRole(state.user.ruolo) : 'guest';
+  }
+
+  function getPermissions() {
+    return ROLE_PERMISSIONS[getRoleKey()] || ROLE_PERMISSIONS.guest;
+  }
+
   function openLoginModal(message = '') {
     const modal = document.getElementById('login-modal');
     const errBox = document.getElementById('login-error-box');
@@ -90,35 +199,61 @@ const AuthManager = (() => {
     alertBox.classList.remove('hidden');
   }
 
+  /**
+   * Mostra/nasconde le sezioni della pagina in base ai permessi del ruolo
+   */
   function render() {
     const guestView = document.getElementById('auth-guest-view');
     const userView = document.getElementById('auth-user-view');
     const nameEl = document.getElementById('current-user-name');
     const roleEl = document.getElementById('current-user-role');
+
     const formCard = document.getElementById('card-nuova-segnalazione');
     const formHint = document.getElementById('form-auth-hint');
+    const scopeBanner = document.getElementById('role-scope-banner');
+    const usersCard = document.getElementById('card-gestione-utenti');
+
+    const perms = getPermissions();
+    const roleKey = getRoleKey();
 
     if (isAuthenticated()) {
       guestView.classList.add('hidden');
       userView.classList.remove('hidden');
-      formCard?.classList.remove('hidden');
 
       nameEl.textContent = state.user.nome;
-      roleEl.textContent = state.user.ruolo;
-      roleEl.setAttribute('data-role', state.user.ruolo);
-
-      if (formHint) {
-        formHint.textContent = `Operatore: ${state.user.nome} (${state.user.ruolo})`;
-      }
+      roleEl.textContent = perms.label;
+      roleEl.setAttribute('data-role', roleKey);
     } else {
       guestView.classList.remove('hidden');
       userView.classList.add('hidden');
-      formCard?.classList.add('hidden');
 
       nameEl.textContent = '-';
       roleEl.textContent = '-';
       roleEl.removeAttribute('data-role');
+    }
+
+    // 1. Visibilità Form "Nuova Segnalazione"
+    if (perms.canCreateReport) {
+      formCard?.classList.remove('hidden');
+      if (formHint) {
+        formHint.textContent = `Operatore: ${state.user.nome} (${perms.label})`;
+      }
+    } else {
+      formCard?.classList.add('hidden');
       if (formHint) formHint.textContent = '';
+    }
+
+    // 2. Banner descrittivo sopra il Registro Segnalazioni
+    if (scopeBanner) {
+      scopeBanner.textContent = perms.scopeDescription;
+    }
+
+    // 3. Visibilità Sezione "Gestione Utenti" (solo Amministratore)
+    if (perms.canManageUsers) {
+      usersCard?.classList.remove('hidden');
+      caricaUtenti();
+    } else {
+      usersCard?.classList.add('hidden');
     }
   }
 
@@ -177,7 +312,7 @@ const AuthManager = (() => {
           credentials: AUTH_CONFIG.strategy === 'cookie' ? 'include' : 'same-origin'
         });
       } catch {
-        // Ignora errori di rete in uscita
+        // Ignora errori in uscita
       }
     }
     clearSession();
@@ -200,6 +335,7 @@ const AuthManager = (() => {
     getUser,
     getUserId,
     getToken,
+    getPermissions,
     clearSession,
     openLoginModal,
     showForbiddenAlert
@@ -207,10 +343,9 @@ const AuthManager = (() => {
 })();
 
 /**
- * PARTE CENTRALIZZATO PER LE CHIAMATE API (apiFetch)
- * - Allega Bearer token / cookie
- * - Inserisce id_utente reale dell'utente loggato nei payload POST/PATCH/PUT
- * - Intercetta globalmente 401 Unauthorized e 403 Forbidden
+ * ============================================================================
+ * WRAPPER CENTRALIZZATO API (apiFetch)
+ * ============================================================================
  */
 async function apiFetch(url, options = {}) {
   const headers = new Headers(options.headers || {});
@@ -227,7 +362,7 @@ async function apiFetch(url, options = {}) {
   if (body && typeof body === 'string' && ['POST', 'PATCH', 'PUT'].includes(method)) {
     try {
       const parsed = JSON.parse(body);
-      if (loggedUserId !== null && parsed && typeof parsed === 'object') {
+      if (loggedUserId !== null && parsed && typeof parsed === 'object' && !parsed.id_utente) {
         parsed.id_utente = loggedUserId;
       }
       body = JSON.stringify(parsed);
@@ -235,7 +370,7 @@ async function apiFetch(url, options = {}) {
         headers.set('Content-Type', 'application/json');
       }
     } catch {
-      // Body non JSON: inviato invariato
+      // Body non JSON
     }
   }
 
@@ -252,7 +387,7 @@ async function apiFetch(url, options = {}) {
   } else if (res.status === 403) {
     const errData = await res.clone().json().catch(() => ({}));
     AuthManager.showForbiddenAlert(
-      errData.errore || errData.message || 'Accesso negato (403): permessi insufficienti.'
+      errData.errore || errData.message || 'Accesso negato (403): permessi insufficienti per il tuo ruolo.'
     );
   }
 
@@ -260,18 +395,21 @@ async function apiFetch(url, options = {}) {
 }
 
 /**
+ * ============================================================================
  * LOGICA APPLICATIVA
+ * ============================================================================
  */
 document.addEventListener('DOMContentLoaded', () => {
   AuthManager.init();
   checkHealth();
   caricaSegnalazioni();
 
-  document.getElementById('form-segnalazione').addEventListener('submit', inviaSegnalazione);
-  document.getElementById('btn-refresh').addEventListener('click', caricaSegnalazioni);
+  document.getElementById('form-segnalazione')?.addEventListener('submit', inviaSegnalazione);
+  document.getElementById('btn-refresh')?.addEventListener('click', caricaSegnalazioni);
+  document.getElementById('btn-refresh-utenti')?.addEventListener('click', caricaUtenti);
+  document.getElementById('form-nuovo-utente')?.addEventListener('submit', creaNuovoUtente);
 });
 
-// Controllo stato Server + DB
 async function checkHealth() {
   const serverBadge = document.getElementById('server-status');
   const dbBadge = document.getElementById('db-status');
@@ -280,21 +418,11 @@ async function checkHealth() {
     const res = await fetch('/health');
     const data = await res.json();
 
-    if (data.server === 'ok') {
-      serverBadge.textContent = 'Server: OK';
-      serverBadge.className = 'status-badge ok';
-    } else {
-      serverBadge.textContent = 'Server: Error';
-      serverBadge.className = 'status-badge error';
-    }
+    serverBadge.textContent = data.server === 'ok' ? 'Server: OK' : 'Server: Error';
+    serverBadge.className = data.server === 'ok' ? 'status-badge ok' : 'status-badge error';
 
-    if (data.database === 'ok') {
-      dbBadge.textContent = 'DB: OK';
-      dbBadge.className = 'status-badge ok';
-    } else {
-      dbBadge.textContent = 'DB: Error';
-      dbBadge.className = 'status-badge error';
-    }
+    dbBadge.textContent = data.database === 'ok' ? 'DB: OK' : 'DB: Error';
+    dbBadge.className = data.database === 'ok' ? 'status-badge ok' : 'status-badge error';
   } catch {
     serverBadge.textContent = 'Server: Offline';
     serverBadge.className = 'status-badge error';
@@ -303,24 +431,45 @@ async function checkHealth() {
   }
 }
 
-// Carica la lista delle segnalazioni
+/**
+ * Carica e filtra la lista delle segnalazioni in base al ruolo attivo
+ */
 async function caricaSegnalazioni() {
   const container = document.getElementById('lista-container');
+  const perms = AuthManager.getPermissions();
+  const currentUser = AuthManager.getUser();
 
-  // Le segnalazioni sono visibili solo dopo il login (il backend risponde 401)
+  // Il backend mostra le segnalazioni solo a chi ha fatto il login (altrimenti 401)
   if (!AuthManager.isAuthenticated()) {
     container.innerHTML = '<p>Effettua il login per vedere le segnalazioni.</p>';
     return;
   }
 
   try {
+    // Squadre e componenti per il menu "Assegna a..." (solo per chi puo assegnare)
+    const squadre = perms.canAssign ? await caricaSquadre() : [];
+
     const res = await apiFetch('/segnalazioni');
     if (!res.ok) throw new Error('Errore nel recupero dati');
 
-    const segnalazioni = await res.json();
+    let segnalazioni = await res.json();
+    if (!Array.isArray(segnalazioni)) segnalazioni = [];
 
-    if (!Array.isArray(segnalazioni) || segnalazioni.length === 0) {
-      container.innerHTML = '<p>Nessuna segnalazione presente nel sistema.</p>';
+    // Filtro visivo lato client (in supporto al filtro lato server)
+    if (currentUser) {
+      if (perms.viewScope === 'own') {
+        segnalazioni = segnalazioni.filter(s => Number(s.id_utente) === Number(currentUser.id));
+      } else if (perms.viewScope === 'team') {
+        if (currentUser.id_squadra) {
+          segnalazioni = segnalazioni.filter(s => Number(s.id_squadra) === Number(currentUser.id_squadra));
+        } else if (currentUser.id_area) {
+          segnalazioni = segnalazioni.filter(s => Number(s.id_area) === Number(currentUser.id_area));
+        }
+      }
+    }
+
+    if (segnalazioni.length === 0) {
+      container.innerHTML = '<p>Nessuna segnalazione visibile per il tuo profilo.</p>';
       return;
     }
 
@@ -332,23 +481,65 @@ async function caricaSegnalazioni() {
             <th>Titolo & Descrizione</th>
             <th>Indirizzo / GPS</th>
             <th>Area / Categoria</th>
-            <th>Canale</th>
             <th>Priorità</th>
             <th>Stato</th>
+            <th>Assegnata a</th>
             <th>Data</th>
+            <th>Azioni</th>
           </tr>
         </thead>
         <tbody>
     `;
 
     segnalazioni.forEach(s => {
-      const latLongText = (s.latitudine && s.longitudine)
-        ? `${s.latitudine}, ${s.longitudine}`
-        : '-';
+      const latLongText = (s.latitudine && s.longitudine) ? `${s.latitudine}, ${s.longitudine}` : '-';
+      const dataCreazione = s.creata_il ? new Date(s.creata_il).toLocaleString('it-IT') : '-';
 
-      const dataCreazione = s.creata_il
-        ? new Date(s.creata_il).toLocaleString('it-IT')
-        : '-';
+      // Tendina stato nell'ordine reale del workflow
+      let statusDropdownHtml = '';
+      if (perms.allowedStatusTransitions.length > 0) {
+        const currentStato = s.stato || 'ricevuta';
+        const currentIndex = ALL_WORKFLOW_STATES.indexOf(currentStato);
+
+        const optionsHtml = ALL_WORKFLOW_STATES.map((st, idx) => {
+          const isCurrent = st === currentStato;
+          // Solo il passo successivo del workflow (come la macchina a stati del backend)
+          const isAllowedNext = idx === currentIndex + 1 && perms.allowedStatusTransitions.includes(st);
+          const label = isCurrent ? `${st} (attuale)` : st;
+
+          return `<option value="${escapeHtml(st)}" ${isCurrent ? 'selected' : ''} ${!isAllowedNext ? 'disabled' : ''}>${escapeHtml(label)}</option>`;
+        }).join('');
+
+        statusDropdownHtml = `
+          <select class="select-stato-azione" data-id="${s.id}" aria-label="Cambia stato segnalazione #${s.id}">
+            ${optionsHtml}
+          </select>
+        `;
+      }
+
+      // Menu "Assegna a...": tutta una squadra oppure una singola persona
+      let assignDropdownHtml = '';
+      if (perms.canAssign && ['valutata', 'assegnata'].includes(s.stato)) {
+        const gruppiHtml = squadre.map(sq => `
+          <optgroup label="${escapeHtml(sq.nome)}">
+            <option value="squadra:${sq.id}">👥 Tutta la squadra</option>
+            ${(sq.membri || []).map(m => `<option value="utente:${m.id}">👤 ${escapeHtml(m.nome_cognome || m.username)}</option>`).join('')}
+          </optgroup>`).join('');
+
+        assignDropdownHtml = `
+          <select class="select-assegna" data-id="${s.id}" aria-label="Assegna segnalazione #${s.id}">
+            <option value="">${s.stato === 'assegnata' ? 'Riassegna a…' : 'Assegna a…'}</option>
+            ${gruppiHtml}
+          </select>
+        `;
+      }
+
+      const viewNotesButton = `<button type="button" class="btn-action-note" data-action="view-notes" data-id="${s.id}">📋 Note</button>`;
+      const addNoteButton = perms.canAddNotes
+        ? `<button type="button" class="btn-action-note" data-action="add-note" data-id="${s.id}">+ Nota</button>`
+        : '';
+
+      const actionsHtml = `<td><div class="action-buttons-group">${statusDropdownHtml}${assignDropdownHtml}${viewNotesButton}${addNoteButton}</div></td>`;
 
       html += `
         <tr>
@@ -365,10 +556,11 @@ async function caricaSegnalazioni() {
             Area: #${s.id_area || '-'}
             <span class="sub-text">Cat: #${s.id_categoria || '-'}</span>
           </td>
-          <td>${escapeHtml(s.canale || 'web')}</td>
           <td><span class="tag-priorita ${escapeHtml(s.priorita || 'media')}">${escapeHtml(s.priorita || 'media')}</span></td>
           <td><span class="badge-stato">${escapeHtml(s.stato || 'ricevuta')}</span></td>
+          <td>${assegnataA(s)}</td>
           <td><span class="sub-text">${dataCreazione}</span></td>
+          ${actionsHtml}
         </tr>
       `;
     });
@@ -376,17 +568,38 @@ async function caricaSegnalazioni() {
     html += '</tbody></table>';
     container.innerHTML = html;
 
+    // Collega gli eventi alla tendina di cambio stato e ai pulsanti note
+    container.querySelectorAll('.select-stato-azione').forEach(select => {
+      select.addEventListener('change', () => {
+        if (select.value) {
+          aggiornaStatoSegnalazione(select.dataset.id, select.value);
+        }
+      });
+    });
+    container.querySelectorAll('.select-assegna').forEach(select => {
+      select.addEventListener('change', () => {
+        if (select.value) {
+          assegnaSegnalazione(select.dataset.id, select.value);
+        }
+      });
+    });
+    container.querySelectorAll('[data-action="view-notes"]').forEach(btn => {
+      btn.addEventListener('click', () => visualizzaNoteSegnalazione(btn.dataset.id));
+    });
+    container.querySelectorAll('[data-action="add-note"]').forEach(btn => {
+      btn.addEventListener('click', () => aggiungiNotaSegnalazione(btn.dataset.id));
+    });
+
   } catch {
     container.innerHTML = `<p style="color: var(--danger-color);">Errore durante il caricamento delle segnalazioni.</p>`;
   }
 }
 
-// Invia una nuova segnalazione (solo utenti autenticati)
 async function inviaSegnalazione(e) {
   e.preventDefault();
 
-  if (!AuthManager.isAuthenticated()) {
-    AuthManager.openLoginModal('Devi effettuare il login per inviare una segnalazione.');
+  if (!AuthManager.getPermissions().canCreateReport) {
+    AuthManager.showForbiddenAlert('Il tuo ruolo non è abilitato alla creazione di nuove segnalazioni.');
     return;
   }
 
@@ -416,17 +629,219 @@ async function inviaSegnalazione(e) {
     if (res.ok) {
       document.getElementById('form-segnalazione').reset();
       caricaSegnalazioni();
-      alert('Segnalazione salvata con successo nel registro!');
+      alert('Segnalazione salvata con successo!');
     } else if (res.status !== 401 && res.status !== 403) {
       const errData = await res.json().catch(() => ({}));
-      alert(`Errore ${res.status}: ${errData.errore || errData.message || 'Errore nella validazione dei dati'}`);
+      alert(`Errore ${res.status}: ${errData.errore || errData.message || 'Errore nella validazione'}`);
     }
   } catch {
     alert('Impossibile contattare il server.');
   }
 }
 
-// Sanitizzazione HTML
+// Testo della colonna "Assegnata a"
+function assegnataA(s) {
+  if (s.squadra_assegnata) return `👥 ${escapeHtml(s.squadra_assegnata)}`;
+  if (s.utente_assegnato) return `👤 ${escapeHtml(s.utente_assegnato)}`;
+  return '<span class="sub-text">Non assegnata</span>';
+}
+
+// Elenco squadre con i componenti (GET /squadre)
+async function caricaSquadre() {
+  try {
+    const res = await apiFetch('/squadre');
+    return res.ok ? await res.json() : [];
+  } catch {
+    return [];
+  }
+}
+
+// Assegna a una squadra ("squadra:1") o a una persona ("utente:2")
+async function assegnaSegnalazione(id, scelta) {
+  const [tipo, idDestinatario] = scelta.split(':');
+  const body = tipo === 'squadra'
+    ? { id_squadra: Number(idDestinatario) }
+    : { id_utente_assegnato: Number(idDestinatario) };
+
+  try {
+    const res = await apiFetch(`/segnalazioni/${id}/assegna`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+
+    if (!res.ok && res.status !== 401 && res.status !== 403) {
+      const errData = await res.json().catch(() => ({}));
+      alert(`Errore ${res.status}: ${errData.errore || errData.message || 'Assegnazione non riuscita'}`);
+    }
+  } catch {
+    alert('Impossibile contattare il server.');
+  }
+  caricaSegnalazioni();
+}
+
+async function aggiornaStatoSegnalazione(id, nuovoStato) {
+  try {
+    const res = await apiFetch(`/segnalazioni/${id}/stato`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ stato: nuovoStato })
+    });
+
+    if (res.ok) {
+      caricaSegnalazioni();
+    } else if (res.status !== 401 && res.status !== 403) {
+      const errData = await res.json().catch(() => ({}));
+      alert(`Errore ${res.status}: ${errData.errore || errData.message || 'Transizione di stato non consentita'}`);
+      caricaSegnalazioni();
+    }
+  } catch {
+    alert('Impossibile contattare il server.');
+  }
+}
+
+async function visualizzaNoteSegnalazione(id) {
+  try {
+    const res = await apiFetch(`/segnalazioni/${id}`);
+    if (!res.ok) {
+      alert(`Errore ${res.status} nel recupero delle note.`);
+      return;
+    }
+
+    const dettaglio = await res.json();
+    let note = Array.isArray(dettaglio)
+      ? dettaglio
+      : (dettaglio.note || dettaglio.note_intervento || dettaglio.notes || []);
+
+    if (note.length === 0) {
+      const resNote = await apiFetch(`/segnalazioni/${id}/note`);
+      if (resNote.ok) {
+        const dataNote = await resNote.json();
+        note = Array.isArray(dataNote) ? dataNote : (dataNote.note || dataNote.note_intervento || []);
+      }
+    }
+
+    if (note.length === 0) {
+      alert(`Nessuna nota presente per la segnalazione #${id}.`);
+      return;
+    }
+
+    const elenco = note.map(n => {
+      const data = n.creata_il ? new Date(n.creata_il).toLocaleString('it-IT') : '';
+      const autore = n.autore || n.username || `Utente #${n.id_utente || '-'}`;
+      return `[${data}] ${autore}:\n${n.testo || n.nota || ''}`;
+    }).join('\n\n----------------\n\n');
+
+    alert(`Note per la segnalazione #${id}:\n\n${elenco}`);
+  } catch {
+    alert('Impossibile recuperare le note dal server.');
+  }
+}
+
+async function aggiungiNotaSegnalazione(id) {
+  const testo = prompt(`Inserisci una nota operativa per la segnalazione #${id}:`);
+  if (!testo || !testo.trim()) return;
+
+  try {
+    const res = await apiFetch(`/segnalazioni/${id}/note`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ testo: testo.trim() })
+    });
+
+    if (res.ok) {
+      alert('Nota aggiunta correttamente.');
+    } else if (res.status !== 401 && res.status !== 403) {
+      const errData = await res.json().catch(() => ({}));
+      alert(`Errore ${res.status}: ${errData.errore || errData.message || 'Impossibile salvare la nota'}`);
+    }
+  } catch {
+    alert('Impossibile contattare il server.');
+  }
+}
+
+/**
+ * Sezione Amministratore: Gestione Utenti (GET / POST /utenti)
+ */
+async function caricaUtenti() {
+  const container = document.getElementById('lista-utenti-container');
+  if (!container || !AuthManager.getPermissions().canManageUsers) return;
+
+  try {
+    const res = await apiFetch('/utenti');
+    if (!res.ok) {
+      container.innerHTML = `<p class="sub-text">Endpoint /utenti non ancora esposto dal backend (${res.status}).</p>`;
+      return;
+    }
+
+    const utenti = await res.json();
+    if (!Array.isArray(utenti) || utenti.length === 0) {
+      container.innerHTML = '<p class="sub-text">Nessun utente trovato.</p>';
+      return;
+    }
+
+    let html = `
+      <table class="table-segnalazioni">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Username</th>
+            <th>Email</th>
+            <th>Ruolo</th>
+          </tr>
+        </thead>
+        <tbody>
+    `;
+
+    utenti.forEach(u => {
+      html += `
+        <tr>
+          <td>#${u.id ?? u.id_utente ?? '-'}</td>
+          <td><strong>${escapeHtml(u.username || u.nome || '-')}</strong></td>
+          <td>${escapeHtml(u.email || '-')}</td>
+          <td><span class="badge-stato">${escapeHtml(u.ruolo || u.role || '-')}</span></td>
+        </tr>
+      `;
+    });
+
+    html += '</tbody></table>';
+    container.innerHTML = html;
+  } catch {
+    container.innerHTML = '<p class="sub-text">Impossibile caricare la lista utenti.</p>';
+  }
+}
+
+async function creaNuovoUtente(e) {
+  e.preventDefault();
+  if (!AuthManager.getPermissions().canManageUsers) return;
+
+  const payload = {
+    username: document.getElementById('new-user-username').value.trim(),
+    email: document.getElementById('new-user-email').value.trim(),
+    ruolo: document.getElementById('new-user-role').value,
+    password: document.getElementById('new-user-password').value
+  };
+
+  try {
+    const res = await apiFetch('/utenti', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    if (res.ok) {
+      document.getElementById('form-nuovo-utente').reset();
+      caricaUtenti();
+      alert('Nuovo utente creato con successo!');
+    } else if (res.status !== 401 && res.status !== 403) {
+      const errData = await res.json().catch(() => ({}));
+      alert(`Errore ${res.status}: ${errData.errore || errData.message || 'Errore nella creazione utente'}`);
+    }
+  } catch {
+    alert('Impossibile contattare il server.');
+  }
+}
+
 function escapeHtml(str) {
   return String(str).replace(/[&<>"']/g, match => {
     const escapeMap = {

@@ -12,9 +12,6 @@
   --border-color: #e2e8f0;
 }
 
-.role-badge[data-role="admin"] { background-color: #c0392b; }
-.role-badge[data-role="user"]  { background-color: #2980b9; }
-
 * {
   box-sizing: border-box;
   margin: 0;
@@ -98,11 +95,11 @@ body {
   color: #fff;
 }
 
-.role-badge[data-role="cittadino"]    { background-color: #7f8c8d; }
-.role-badge[data-role="operatore"]    { background-color: #2980b9; }
-.role-badge[data-role="squadra"]      { background-color: #e67e22; }
-.role-badge[data-role="responsabile"] { background-color: #c0392b; }
-.role-badge[data-role="segnalatore"]        { background-color: #7f8c8d; }
+.role-badge[data-role="cittadino"]          { background-color: #7f8c8d; }
+.role-badge[data-role="operatore"]          { background-color: #2980b9; }
+.role-badge[data-role="squadra"]            { background-color: #e67e22; }
+.role-badge[data-role="responsabile"]       { background-color: #c0392b; }
+.role-badge[data-role="segnalatore"]        { background-color: #27ae60; }
 .role-badge[data-role="operatore_centrale"] { background-color: #2980b9; }
 .role-badge[data-role="amministratore"]     { background-color: #8e44ad; }
 
@@ -336,7 +333,56 @@ select:disabled {
   color: #2d3748;
 }
 
+/* PULSANTI AZIONI NELLA TABELLA */
+.action-buttons-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.btn-action-status,
+.btn-action-note {
+  padding: 0.25rem 0.5rem;
+  font-size: 0.78rem;
+  border-radius: 4px;
+  border: 1px solid #cbd5e1;
+  background-color: #f8fafc;
+  color: #1e293b;
+  cursor: pointer;
+  font-weight: 600;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.btn-action-status:hover {
+  background-color: var(--secondary-color);
+  color: #ffffff;
+  border-color: var(--secondary-color);
+}
+
+.btn-action-note {
+  background-color: #fefce8;
+  border-color: #fde047;
+  color: #854d0e;
+}
+
+.btn-action-note:hover {
+  background-color: #facc15;
+  color: #1e293b;
+}
+
 .loading {
   color: #7f8c8d;
   font-style: italic;
+}
+
+/* Menu "Assegna a..." nella colonna Azioni */
+.select-assegna {
+  padding: 0.25rem 0.4rem;
+  font-size: 0.78rem;
+  border-radius: 4px;
+  border: 1px solid #93c5fd;
+  background-color: #eff6ff;
+  color: #1e3a8a;
+  font-weight: 600;
+  cursor: pointer;
 }

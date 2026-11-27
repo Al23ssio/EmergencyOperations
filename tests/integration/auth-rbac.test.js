@@ -117,9 +117,9 @@ describe('Permessi dei 5 ruoli (matrice RBAC)', () => {
   test('assegnazione: squadra NO (403), operatore SI (201)', async () => {
     const percorso = `/segnalazioni/${idSegnalazione}/assegna`;
     assert.strictEqual((await chiama('POST', percorso, token.squadraNord, { id_squadra: 1 })).status, 403);
-    assert.strictEqual((await chiama('POST', percorso, token.operatore, { id_squadra: 1 })).status, 201);
-    const { status } = await chiama('PATCH', `/segnalazioni/${idSegnalazione}/stato`, token.operatore, { stato: 'assegnata' });
-    assert.strictEqual(status, 200);
+    const { status, data } = await chiama('POST', percorso, token.operatore, { id_squadra: 1 });
+    assert.strictEqual(status, 201);
+    assert.strictEqual(data.stato, 'assegnata', 'assegnando, lo stato passa da solo ad "assegnata"');
   });
 
   test('GET /segnalazioni: la squadra vede solo quelle assegnate a lei', async () => {

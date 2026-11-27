@@ -50,7 +50,7 @@
       <form id="login-form" novalidate>
         <div class="form-group">
           <label for="login-identifier">Email o Username *</label>
-          <input type="text" id="login-identifier" name="identifier" required autocomplete="username" placeholder="es. mrossi o mario.rossi@ente.it">
+          <input type="text" id="login-identifier" name="identifier" required autocomplete="username" placeholder="es. mrossi o admin">
         </div>
 
         <div class="form-group">
@@ -68,7 +68,7 @@
   </div>
 
   <main class="container">
-    <!-- FORM DI INSERIMENTO COMPLETO (visibile SOLO dopo il Login) -->
+    <!-- 1. FORM NUOVA SEGNALAZIONE (Visibile SOLO a: Segnalatore, Operatore di centrale, Amministratore) -->
     <section id="card-nuova-segnalazione" class="card hidden">
       <div class="card-header">
         <h2>Nuova Segnalazione Completa</h2>
@@ -148,14 +148,58 @@
       </form>
     </section>
 
-    <!-- TABELLA VISUALIZZAZIONE DETTAGLIATA (sempre visibile) -->
+    <!-- 2. REGISTRO SEGNALAZIONI (Sempre visibile, con contenuto e azioni adattati al ruolo) -->
     <section class="card">
       <div class="card-header">
-        <h2>Registro Segnalazioni</h2>
+        <div>
+          <h2>Registro Segnalazioni</h2>
+          <span id="role-scope-banner" class="sub-text">Vista pubblica in sola lettura</span>
+        </div>
         <button id="btn-refresh" class="btn btn-secondary">🔄 Aggiorna</button>
       </div>
       <div id="lista-container" class="table-responsive">
         <p class="loading">Caricamento segnalazioni in corso...</p>
+      </div>
+    </section>
+
+    <!-- 3. GESTIONE UTENTI (Visibile SOLO ad Amministratore) -->
+    <section id="card-gestione-utenti" class="card hidden">
+      <div class="card-header">
+        <div>
+          <h2>Gestione Utenti (Area Amministratore)</h2>
+          <span class="sub-text">Elenco account registrati e creazione nuovi operatori</span>
+        </div>
+        <button id="btn-refresh-utenti" class="btn btn-secondary btn-sm">🔄 Aggiorna Utenti</button>
+      </div>
+
+      <form id="form-nuovo-utente" class="form-grid" style="margin-bottom: 1.5rem;">
+        <div class="form-group">
+          <label for="new-user-username">Username *</label>
+          <input type="text" id="new-user-username" required placeholder="es. fverdi">
+        </div>
+        <div class="form-group">
+          <label for="new-user-email">Email *</label>
+          <input type="email" id="new-user-email" required placeholder="es. franco.verdi@example.com">
+        </div>
+        <div class="form-group">
+          <label for="new-user-role">Ruolo *</label>
+          <select id="new-user-role" required>
+            <option value="segnalatore">Segnalatore</option>
+            <option value="operatore_centrale">Operatore di centrale</option>
+            <option value="squadra">Squadra</option>
+            <option value="responsabile">Responsabile</option>
+            <option value="amministratore">Amministratore</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="new-user-password">Password Temporanea *</label>
+          <input type="password" id="new-user-password" required placeholder="Password123!">
+        </div>
+        <button type="submit" class="btn btn-primary full-width">Crea Utente</button>
+      </form>
+
+      <div id="lista-utenti-container" class="table-responsive">
+        <p class="sub-text">Caricamento utenti...</p>
       </div>
     </section>
   </main>

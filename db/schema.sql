@@ -94,7 +94,11 @@ CREATE TABLE categoria (
 -- ---------------------------------------------------------------------
 -- SEGNALAZIONE(id, titolo, descrizione, indirizzo, latitudine, longitudine,
 --              priorita, stato, canale, classificazione_ai, creata_il,
---              chiusa_il, id_utente, id_area, id_categoria)
+--              chiusa_il, id_utente, id_area, id_categoria,
+--              id_squadra_assegnata, id_utente_assegnato)
+-- id_squadra_assegnata / id_utente_assegnato = a chi e affidato ORA il
+-- compito: a una squadra intera OPPURE a una singola persona (mai entrambi).
+-- Lo storico di tutte le assegnazioni resta nella tabella ASSEGNAZIONE.
 -- ---------------------------------------------------------------------
 CREATE TABLE segnalazione (
   id                 SERIAL PRIMARY KEY,
@@ -115,8 +119,12 @@ CREATE TABLE segnalazione (
   id_utente          INT NOT NULL REFERENCES utente(id),
   id_area            INT NOT NULL REFERENCES area(id),
   id_categoria       INT REFERENCES categoria(id),
+  id_squadra_assegnata INT REFERENCES squadra(id),
+  id_utente_assegnato  INT REFERENCES utente(id),
   -- la data di chiusura c'e solo se la segnalazione e chiusa
-  CHECK ((stato = 'chiusa') = (chiusa_il IS NOT NULL))
+  CHECK ((stato = 'chiusa') = (chiusa_il IS NOT NULL)),
+  -- assegnata a una squadra oppure a una persona, non a tutte e due
+  CHECK (id_squadra_assegnata IS NULL OR id_utente_assegnato IS NULL)
 );
 
 -- ---------------------------------------------------------------------
@@ -135,18 +143,24 @@ CREATE TABLE allegato (
 );
 
 -- ---------------------------------------------------------------------
--- ASSEGNAZIONE(id, assegnata_il, terminata_il, id_squadra, id_utente,
---              id_segnalazione)
+-- ASSEGNAZIONE(id, assegnata_il, terminata_il, id_squadra,
+--              id_utente_assegnato, id_utente, id_segnalazione)
+-- Storico delle assegnazioni: a una squadra (id_squadra) OPPURE a una
+-- persona (id_utente_assegnato). terminata_il viene compilato quando la
+-- segnalazione viene riassegnata a qualcun altro.
 -- id_utente = operatore di centrale che ha disposto l'assegnazione.
 -- ---------------------------------------------------------------------
 CREATE TABLE assegnazione (
-  id              SERIAL PRIMARY KEY,
-  assegnata_il    TIMESTAMPTZ NOT NULL DEFAULT now(),
-  terminata_il    TIMESTAMPTZ,
-  id_squadra      INT NOT NULL REFERENCES squadra(id),
-  id_utente       INT NOT NULL REFERENCES utente(id),
-  id_segnalazione INT NOT NULL REFERENCES segnalazione(id) ON DELETE CASCADE,
-  CHECK (terminata_il IS NULL OR terminata_il >= assegnata_il)
+  id                  SERIAL PRIMARY KEY,
+  assegnata_il        TIMESTAMPTZ NOT NULL DEFAULT now(),
+  terminata_il        TIMESTAMPTZ,
+  id_squadra          INT REFERENCES squadra(id),
+  id_utente_assegnato INT REFERENCES utente(id),
+  id_utente           INT NOT NULL REFERENCES utente(id),
+  id_segnalazione     INT NOT NULL REFERENCES segnalazione(id) ON DELETE CASCADE,
+  CHECK (terminata_il IS NULL OR terminata_il >= assegnata_il),
+  -- esattamente uno dei due: squadra oppure persona
+  CHECK ((id_squadra IS NULL) <> (id_utente_assegnato IS NULL))
 );
 
 -- ---------------------------------------------------------------------
@@ -203,6 +217,8 @@ CREATE TABLE suggerimento_ai (
 CREATE INDEX idx_segnalazione_stato     ON segnalazione (stato);
 CREATE INDEX idx_segnalazione_area      ON segnalazione (id_area);
 CREATE INDEX idx_segnalazione_categoria ON segnalazione (id_categoria);
+CREATE INDEX idx_segnalazione_squadra_ass ON segnalazione (id_squadra_assegnata);
+CREATE INDEX idx_segnalazione_utente_ass  ON segnalazione (id_utente_assegnato);
 CREATE INDEX idx_allegato_segnalazione  ON allegato (id_segnalazione);
 CREATE INDEX idx_assegnazione_segn      ON assegnazione (id_segnalazione);
 CREATE INDEX idx_nota_segnalazione      ON nota (id_segnalazione);
