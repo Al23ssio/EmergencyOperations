@@ -374,3 +374,15 @@ select:disabled {
   color: #7f8c8d;
   font-style: italic;
 }
+
+/* Menu "Assegna a..." nella colonna Azioni */
+.select-assegna {
+  padding: 0.25rem 0.4rem;
+  font-size: 0.78rem;
+  border-radius: 4px;
+  border: 1px solid #93c5fd;
+  background-color: #eff6ff;
+  color: #1e3a8a;
+  font-weight: 600;
+  cursor: pointer;
+}

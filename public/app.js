@@ -52,6 +52,7 @@ const ROLE_PERMISSIONS = {
     viewScope: 'all',
     canCreateReport: false,
     allowedStatusTransitions: [],
+    canAssign: false,
     canAddNotes: false,
     canManageUsers: false
   },
@@ -61,6 +62,7 @@ const ROLE_PERMISSIONS = {
     viewScope: 'own',
     canCreateReport: true,
     allowedStatusTransitions: [],
+    canAssign: false,
     canAddNotes: true,
     canManageUsers: false
   },
@@ -69,16 +71,19 @@ const ROLE_PERMISSIONS = {
     scopeDescription: 'Vista Centrale Operativa: vedi tutte le segnalazioni, puoi crearne e gestirne valutazione/assegnazione/chiusura',
     viewScope: 'all',
     canCreateReport: true,
-    allowedStatusTransitions: ['valutata', 'assegnata', 'chiusa'],
+    // "assegnata" si ottiene scegliendo a chi assegnare (menu "Assegna a...")
+    allowedStatusTransitions: ['valutata', 'chiusa'],
+    canAssign: true,
     canAddNotes: true,
     canManageUsers: false
   },
   squadra: {
     label: 'Squadra',
-    scopeDescription: 'Vista Squadra: vedi solo le segnalazioni assegnate alla tua squadra e aggiorni l\'intervento',
+    scopeDescription: 'Vista Squadra: vedi solo i compiti assegnati a te o alla tua squadra e ne aggiorni lo stato (in intervento, risolta)',
     viewScope: 'team',
     canCreateReport: false,
     allowedStatusTransitions: ['in_intervento', 'risolta'],
+    canAssign: false,
     canAddNotes: true,
     canManageUsers: false
   },
@@ -88,6 +93,7 @@ const ROLE_PERMISSIONS = {
     viewScope: 'all',
     canCreateReport: false,
     allowedStatusTransitions: [],
+    canAssign: false,
     canAddNotes: true,
     canManageUsers: false
   },
@@ -96,7 +102,8 @@ const ROLE_PERMISSIONS = {
     scopeDescription: 'Vista Amministratore: accesso completo a segnalazioni, stati, note e gestione utenti',
     viewScope: 'all',
     canCreateReport: true,
-    allowedStatusTransitions: ['valutata', 'assegnata', 'in_intervento', 'risolta', 'chiusa'],
+    allowedStatusTransitions: ['valutata', 'in_intervento', 'risolta', 'chiusa'],
+    canAssign: true,
     canAddNotes: true,
     canManageUsers: true
   }
@@ -432,7 +439,16 @@ async function caricaSegnalazioni() {
   const perms = AuthManager.getPermissions();
   const currentUser = AuthManager.getUser();
 
+  // Il backend mostra le segnalazioni solo a chi ha fatto il login (altrimenti 401)
+  if (!AuthManager.isAuthenticated()) {
+    container.innerHTML = '<p>Effettua il login per vedere le segnalazioni.</p>';
+    return;
+  }
+
   try {
+    // Squadre e componenti per il menu "Assegna a..." (solo per chi puo assegnare)
+    const squadre = perms.canAssign ? await caricaSquadre() : [];
+
     const res = await apiFetch('/segnalazioni');
     if (!res.ok) throw new Error('Errore nel recupero dati');
 
@@ -467,6 +483,7 @@ async function caricaSegnalazioni() {
             <th>Area / Categoria</th>
             <th>Priorità</th>
             <th>Stato</th>
+            <th>Assegnata a</th>
             <th>Data</th>
             <th>Azioni</th>
           </tr>
@@ -486,7 +503,8 @@ async function caricaSegnalazioni() {
 
         const optionsHtml = ALL_WORKFLOW_STATES.map((st, idx) => {
           const isCurrent = st === currentStato;
-          const isAllowedNext = idx > currentIndex && perms.allowedStatusTransitions.includes(st);
+          // Solo il passo successivo del workflow (come la macchina a stati del backend)
+          const isAllowedNext = idx === currentIndex + 1 && perms.allowedStatusTransitions.includes(st);
           const label = isCurrent ? `${st} (attuale)` : st;
 
           return `<option value="${escapeHtml(st)}" ${isCurrent ? 'selected' : ''} ${!isAllowedNext ? 'disabled' : ''}>${escapeHtml(label)}</option>`;
@@ -499,12 +517,29 @@ async function caricaSegnalazioni() {
         `;
       }
 
+      // Menu "Assegna a...": tutta una squadra oppure una singola persona
+      let assignDropdownHtml = '';
+      if (perms.canAssign && ['valutata', 'assegnata'].includes(s.stato)) {
+        const gruppiHtml = squadre.map(sq => `
+          <optgroup label="${escapeHtml(sq.nome)}">
+            <option value="squadra:${sq.id}">👥 Tutta la squadra</option>
+            ${(sq.membri || []).map(m => `<option value="utente:${m.id}">👤 ${escapeHtml(m.nome_cognome || m.username)}</option>`).join('')}
+          </optgroup>`).join('');
+
+        assignDropdownHtml = `
+          <select class="select-assegna" data-id="${s.id}" aria-label="Assegna segnalazione #${s.id}">
+            <option value="">${s.stato === 'assegnata' ? 'Riassegna a…' : 'Assegna a…'}</option>
+            ${gruppiHtml}
+          </select>
+        `;
+      }
+
       const viewNotesButton = `<button type="button" class="btn-action-note" data-action="view-notes" data-id="${s.id}">📋 Note</button>`;
       const addNoteButton = perms.canAddNotes
         ? `<button type="button" class="btn-action-note" data-action="add-note" data-id="${s.id}">+ Nota</button>`
         : '';
 
-      const actionsHtml = `<td><div class="action-buttons-group">${statusDropdownHtml}${viewNotesButton}${addNoteButton}</div></td>`;
+      const actionsHtml = `<td><div class="action-buttons-group">${statusDropdownHtml}${assignDropdownHtml}${viewNotesButton}${addNoteButton}</div></td>`;
 
       html += `
         <tr>
@@ -523,6 +558,7 @@ async function caricaSegnalazioni() {
           </td>
           <td><span class="tag-priorita ${escapeHtml(s.priorita || 'media')}">${escapeHtml(s.priorita || 'media')}</span></td>
           <td><span class="badge-stato">${escapeHtml(s.stato || 'ricevuta')}</span></td>
+          <td>${assegnataA(s)}</td>
           <td><span class="sub-text">${dataCreazione}</span></td>
           ${actionsHtml}
         </tr>
@@ -537,6 +573,13 @@ async function caricaSegnalazioni() {
       select.addEventListener('change', () => {
         if (select.value) {
           aggiornaStatoSegnalazione(select.dataset.id, select.value);
+        }
+      });
+    });
+    container.querySelectorAll('.select-assegna').forEach(select => {
+      select.addEventListener('change', () => {
+        if (select.value) {
+          assegnaSegnalazione(select.dataset.id, select.value);
         }
       });
     });
@@ -594,6 +637,47 @@ async function inviaSegnalazione(e) {
   } catch {
     alert('Impossibile contattare il server.');
   }
+}
+
+// Testo della colonna "Assegnata a"
+function assegnataA(s) {
+  if (s.squadra_assegnata) return `👥 ${escapeHtml(s.squadra_assegnata)}`;
+  if (s.utente_assegnato) return `👤 ${escapeHtml(s.utente_assegnato)}`;
+  return '<span class="sub-text">Non assegnata</span>';
+}
+
+// Elenco squadre con i componenti (GET /squadre)
+async function caricaSquadre() {
+  try {
+    const res = await apiFetch('/squadre');
+    return res.ok ? await res.json() : [];
+  } catch {
+    return [];
+  }
+}
+
+// Assegna a una squadra ("squadra:1") o a una persona ("utente:2")
+async function assegnaSegnalazione(id, scelta) {
+  const [tipo, idDestinatario] = scelta.split(':');
+  const body = tipo === 'squadra'
+    ? { id_squadra: Number(idDestinatario) }
+    : { id_utente_assegnato: Number(idDestinatario) };
+
+  try {
+    const res = await apiFetch(`/segnalazioni/${id}/assegna`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+
+    if (!res.ok && res.status !== 401 && res.status !== 403) {
+      const errData = await res.json().catch(() => ({}));
+      alert(`Errore ${res.status}: ${errData.errore || errData.message || 'Assegnazione non riuscita'}`);
+    }
+  } catch {
+    alert('Impossibile contattare il server.');
+  }
+  caricaSegnalazioni();
 }
 
 async function aggiornaStatoSegnalazione(id, nuovoStato) {
